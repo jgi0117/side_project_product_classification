@@ -1,0 +1,54 @@
+# Google Drive for desktop으로 mount된 원본 데이터 경로입니다.
+drive_folder_url: 'https://drive.google.com/drive/folders/18mUVx75GlJyRX6vUnw4zDWEWwwrPR8Fg?usp=sharing'
+raw_dir: 'G:/My Drive/side_project/sample'
+model_dir: models/weights
+output_dir: outputs/benchmark
+
+classes:
+  - bicycle
+  - book
+  - guitar
+  - laptop
+
+models:
+  - yolov8n-cls.pt
+  - yolo11n-cls.pt
+  - yolo26n-cls.pt
+
+# pytorch, onnx 또는 둘 다 선택할 수 있습니다.
+backends:
+  - pytorch
+  - onnx
+
+onnx:
+  simplify: true
+
+# 기대 클래스 점수가 임계값보다 낮으면 unknown/reject 처리합니다.
+# 실제 운영 정책에 맞춰 클래스별로 조정하세요.
+verification_thresholds:
+  bicycle: 0.05
+  book: 0.05
+  guitar: 0.05
+  laptop: 0.05
+
+# ImageNet-1K 출력 중 각 목표 카테고리에 합산할 이름 패턴입니다.
+imagenet_class_patterns:
+  bicycle:
+    - bicycle-built-for-two
+    - mountain bike
+    - all-terrain bike
+  book:
+    - book jacket
+    - comic book
+  guitar:
+    - acoustic guitar
+    - electric guitar
+  laptop:
+    - laptop
+    - notebook
+
+seed: 42
+imgsz: 224
+device: auto
+speed_warmup: 5
+speed_repeats: 3

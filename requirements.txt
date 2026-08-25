@@ -1,0 +1,14 @@
+ultralytics
+torch
+torchvision
+numpy
+scikit-learn
+PyYAML
+Pillow
+matplotlib
+tqdm
+seaborn
+pandas
+onnx
+onnxruntime
+onnxslim

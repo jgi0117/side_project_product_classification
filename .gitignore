@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Data
+data/
+datasets/
+sample/
+
+# Generated benchmark artifacts
+models/weights/
+models/exported/
+outputs/
