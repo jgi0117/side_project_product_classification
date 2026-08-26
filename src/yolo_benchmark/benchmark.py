@@ -85,20 +85,27 @@ def _predict_scores(
     target_probability_masses: list[float] = []
     matched_names: dict[str, list[str]] | None = None
     class_indices: dict[str, list[int]] | None = None
-    results = model.predict(
-        source=[str(path) for path in paths],
-        imgsz=imgsz,
-        batch=1,
-        device=device,
-        verbose=False,
-        stream=True,
-    )
-    for result in tqdm(
-        results,
-        total=len(paths),
-        desc=f"{Path(model_name).stem} inference",
+    # Invoke both backends with exactly one image per call. Passing a list of
+    # paths to an exported ONNX classifier can be assembled by Ultralytics as
+    # one N-image tensor even when batch=1, while the exported graph has a
+    # static batch dimension of 1.
+    for path in tqdm(
+        paths,
+        desc=f"{Path(model_name).stem} scoring (not speed metric)",
         unit="image",
     ):
+        batch_results = model.predict(
+            source=str(path),
+            imgsz=imgsz,
+            batch=1,
+            device=device,
+            verbose=False,
+        )
+        if len(batch_results) != 1:
+            raise RuntimeError(
+                f"batch=1 추론 결과가 {len(batch_results)}개 반환됐습니다: {path}"
+            )
+        result = batch_results[0]
         if result.probs is None:
             raise RuntimeError("분류 확률이 없습니다. 반드시 *-cls.pt 모델을 사용하세요.")
         if class_indices is None:

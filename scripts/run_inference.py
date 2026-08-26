@@ -87,8 +87,8 @@ def main() -> None:
     items, invalid_images = discover_images(source, config["classes"])
     print(f"Unique valid images: {len(items)}, invalid skipped: {invalid_images}")
     results_by_backend = {backend: [] for backend in backends}
-    for model_name in models:
-        for backend in backends:
+    for backend in backends:
+        for model_name in models:
             print(f"\n===== {model_name} [{backend}] =====")
             results_by_backend[backend].append(
                 evaluate_zero_shot(

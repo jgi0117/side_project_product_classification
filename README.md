@@ -106,6 +106,11 @@ python scripts\run_inference.py --models yolov8n-cls.pt --backend both
 이미지 검증, 모델별 inference, 반복 속도 측정은 `tqdm` 진행률과 ETA를 실시간으로
 표시합니다.
 
+`scoring (not speed metric)`의 `image/s`는 Drive 파일 접근과 결과 생성이 포함된
+진행 상황 표시이므로 backend 속도 지표로 사용하지 않습니다. 속도 비교에는 두
+backend 모두 batch=1, 파일 디코딩 제외, warm-up 적용 조건으로 별도 수행되는
+`speed test`의 `latency_mean_ms`를 사용합니다.
+
 사전학습 `.pt` 체크포인트와 최초 ONNX 실행 때 export되는 `.onnx` 파일은
 `inference.yaml`의 `model_dir`에 따라 `models/weights`에 저장됩니다. ONNX
 단순화 여부는 `onnx.simplify`로 설정합니다.
