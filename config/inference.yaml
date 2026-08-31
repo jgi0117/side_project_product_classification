@@ -31,6 +31,9 @@ verification_thresholds:
   guitar: 0.05
   laptop: 0.05
 
+# 임계값을 넘더라도 점수 순위가 top-k 안인 라벨만 승인합니다.
+top_k: 1
+
 # ImageNet-1K 출력 중 각 목표 카테고리에 합산할 이름 패턴입니다.
 imagenet_class_patterns:
   bicycle:

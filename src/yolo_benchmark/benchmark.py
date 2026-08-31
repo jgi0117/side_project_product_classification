@@ -134,6 +134,117 @@ def _predict_scores(
     )
 
 
+def _primary_label_operating_metrics(
+    targets: list[int] | np.ndarray,
+    accepted: np.ndarray,
+    classes: list[str],
+) -> dict[str, Any]:
+    """Metrics that remain valid when folder labels are not exhaustive.
+
+    A folder label is treated as one object known to be present. Other accepted
+    labels are reported as additional activations, not false positives, because
+    another configured object may also be visible in the same image.
+    """
+    target_array = np.asarray(targets, dtype=int)
+    accepted_array = np.asarray(accepted, dtype=bool)
+    expected_shape = (len(target_array), len(classes))
+    if accepted_array.shape != expected_shape:
+        raise ValueError(
+            f"accepted shape must be {expected_shape}, got {accepted_array.shape}"
+        )
+
+    accepted_counts = accepted_array.sum(axis=1)
+    expected_accepted = accepted_array[np.arange(len(target_array)), target_array]
+    per_class: dict[str, dict[str, float | int]] = {}
+    target_accept_rates: list[float] = []
+    additional_activation_rates: list[float] = []
+    for index, name in enumerate(classes):
+        rows = target_array == index
+        image_count = int(rows.sum())
+        row_accepts = accepted_array[rows]
+        target_accept_rate = float(row_accepts[:, index].mean())
+        additional_mask = row_accepts.copy()
+        additional_mask[:, index] = False
+        additional_activation_rate = float(np.any(additional_mask, axis=1).mean())
+        target_accept_rates.append(target_accept_rate)
+        additional_activation_rates.append(additional_activation_rate)
+        per_class[name] = {
+            "images": image_count,
+            "expected_label_accepts": int(row_accepts[:, index].sum()),
+            "expected_label_rejects": int((~row_accepts[:, index]).sum()),
+            "expected_label_accept_rate": target_accept_rate,
+            "expected_label_reject_rate": float(1.0 - target_accept_rate),
+            "additional_label_activation_rate": additional_activation_rate,
+        }
+
+    return {
+        "expected_label_accept_rate_macro": float(
+            statistics.fmean(target_accept_rates)
+        ),
+        "expected_label_reject_rate_macro": float(
+            statistics.fmean(1.0 - rate for rate in target_accept_rates)
+        ),
+        "additional_label_activation_rate_macro": float(
+            statistics.fmean(additional_activation_rates)
+        ),
+        "multiple_label_rate": float(np.mean(accepted_counts > 1)),
+        "no_label_rate": float(np.mean(accepted_counts == 0)),
+        "expected_label_accepted_overall": float(expected_accepted.mean()),
+        "per_class_primary_label_metrics": per_class,
+        "label_semantics": "folder_label_is_known_present_but_not_exhaustive",
+        "false_accept_rate_available": False,
+    }
+
+
+def _apply_top_k_thresholds(
+    scores: np.ndarray,
+    threshold_values: np.ndarray,
+    top_k: int,
+) -> np.ndarray:
+    """Accept threshold-passing labels only when they rank within top-k."""
+    score_array = np.asarray(scores, dtype=float)
+    thresholds = np.asarray(threshold_values, dtype=float)
+    if score_array.ndim != 2 or thresholds.shape != (score_array.shape[1],):
+        raise ValueError("scores and threshold_values have incompatible shapes")
+    if not 1 <= top_k <= score_array.shape[1]:
+        raise ValueError(f"top_k must be between 1 and {score_array.shape[1]}")
+
+    ranked_indices = np.argsort(-score_array, axis=1)[:, :top_k]
+    accepted = np.zeros_like(score_array, dtype=bool)
+    rows = np.arange(score_array.shape[0])[:, None]
+    accepted[rows, ranked_indices] = (
+        score_array[rows, ranked_indices] >= thresholds[ranked_indices]
+    )
+    return accepted
+
+
+def _top1_outcomes_by_primary_label(
+    targets: list[int] | np.ndarray,
+    predictions: list[int] | np.ndarray,
+    open_predictions: list[int] | np.ndarray,
+    classes: list[str],
+) -> dict[str, dict[str, dict[str, int]]]:
+    """Count raw and thresholded top-1 outcomes for each primary label."""
+    target_array = np.asarray(targets, dtype=int)
+    prediction_array = np.asarray(predictions, dtype=int)
+    open_prediction_array = np.asarray(open_predictions, dtype=int)
+    outcomes: dict[str, dict[str, dict[str, int]]] = {}
+    for target_index, target_name in enumerate(classes):
+        rows = target_array == target_index
+        raw_counts = Counter(classes[index] for index in prediction_array[rows])
+        final_counts = Counter(
+            classes[index] if index < len(classes) else "unknown"
+            for index in open_prediction_array[rows]
+        )
+        outcomes[target_name] = {
+            "raw_top1": {name: int(raw_counts[name]) for name in classes},
+            "final_top1": {
+                name: int(final_counts[name]) for name in [*classes, "unknown"]
+            },
+        }
+    return outcomes
+
+
 def _measure_latency(
     model: Any,
     model_name: str,
@@ -228,6 +339,7 @@ def evaluate_zero_shot(
     speed_warmup: int,
     speed_repeats: int,
     thresholds: dict[str, float],
+    top_k: int,
     onnx_simplify: bool,
     items: list[ImageItem] | None = None,
     invalid_images: int = 0,
@@ -247,13 +359,17 @@ def evaluate_zero_shot(
         model, run_label, paths, classes, patterns, device, imgsz
     )
     threshold_values = np.asarray([float(thresholds[name]) for name in classes])
-    accepted = scores >= threshold_values
+    accepted = _apply_top_k_thresholds(scores, threshold_values, top_k)
+    operating_metrics = _primary_label_operating_metrics(targets, accepted, classes)
     open_predictions = [
         prediction
         if scores[row, prediction] >= threshold_values[prediction]
         else len(classes)
         for row, prediction in enumerate(predictions)
     ]
+    top1_outcomes = _top1_outcomes_by_primary_label(
+        targets, predictions, open_predictions, classes
+    )
     open_set_top1_accuracy = accuracy_score(targets, open_predictions)
     binary_accuracies = []
     binary_balanced_accuracies = []
@@ -318,9 +434,7 @@ def evaluate_zero_shot(
                     if accepted[row_index, index]
                 ) or "unknown",
                 "expected_class_score": float(probabilities[target]),
-                "expected_class_accepted": bool(
-                    probabilities[target] >= threshold_values[target]
-                ),
+                "expected_class_accepted": bool(accepted[row_index, target]),
                 "target_probability_mass": target_mass,
             }
             row.update(
@@ -343,16 +457,19 @@ def evaluate_zero_shot(
         "checkpoint": str(checkpoint),
         "model_size_mb": float(checkpoint.stat().st_size / (1024**2)),
         "mode": "zero_shot_imagenet_open_set_verification",
-        # Primary accuracy: four independent one-vs-rest verification tasks.
-        # A laptop is accepted from its own score, regardless of another
-        # target class receiving a higher score.
+        # Legacy single-label proxy metrics are retained for compatibility.
+        # They must not be interpreted as false-accept measurements because a
+        # folder label does not prove that other configured objects are absent.
         "accuracy": verification_accuracy,
         "auc_macro_ovr": float(auc),
         "verification_accuracy_macro": verification_accuracy,
         "verification_balanced_accuracy_macro": verification_balanced_accuracy,
+        **operating_metrics,
         "open_set_top1_accuracy": float(open_set_top1_accuracy),
         "per_class_auc": per_class_auc,
         "verification_thresholds": thresholds,
+        "top_k": top_k,
+        "top1_outcomes_by_primary_label": top1_outcomes,
         "latency_mean_ms": float(mean_latency),
         "latency_p50_ms": float(np.percentile(latencies, 50)),
         "latency_p95_ms": float(np.percentile(latencies, 95)),
@@ -390,10 +507,16 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
         "checkpoint",
         "model_size_mb",
         "mode",
+        "top_k",
         "accuracy",
         "auc_macro_ovr",
         "verification_accuracy_macro",
         "verification_balanced_accuracy_macro",
+        "expected_label_accept_rate_macro",
+        "expected_label_reject_rate_macro",
+        "additional_label_activation_rate_macro",
+        "multiple_label_rate",
+        "no_label_rate",
         "open_set_top1_accuracy",
         "latency_mean_ms",
         "latency_p50_ms",
@@ -424,26 +547,25 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
 
     frame = pd.DataFrame(results)
     frame["model_label"] = frame["model"].map(lambda value: Path(value).stem)
-    frame["backend_label"] = frame["backend"].str.upper()
     sns.set_theme(style="whitegrid", context="talk", font_scale=0.85)
-    palette = {"PYTORCH": "#4C78A8", "ONNX": "#F58518"}
-    figure, axes_grid = plt.subplots(2, 2, figsize=(13, 10))
+    figure, axes_grid = plt.subplots(2, 3, figsize=(17, 10))
     axes = axes_grid.flatten()
     specs = [
-        ("accuracy", "Verification Accuracy", (0, 1), False, "%.3f"),
-        ("auc_macro_ovr", "Macro OvR AUC", (0, 1), False, "%.3f"),
-        ("latency_mean_ms", "Latency (ms/image)", None, True, "%.2f"),
-        ("model_size_mb", "Model Size (MiB)", None, True, "%.2f"),
+        ("expected_label_accept_rate_macro", "Expected Label Accept Rate ↑", (0, 1), "%.1f%%", 100),
+        ("expected_label_reject_rate_macro", "Expected Label Reject Rate ↓", (0, 1), "%.1f%%", 100),
+        ("additional_label_activation_rate_macro", "Additional Label Activation", (0, 1), "%.1f%%", 100),
+        ("multiple_label_rate", "Multiple-label Rate", (0, 1), "%.1f%%", 100),
+        ("latency_mean_ms", "Latency (ms/image) ↓", None, "%.2f", 1),
+        ("model_size_mb", "Model Size (MiB) ↓", None, "%.2f", 1),
     ]
-    for axis, (key, title, limits, lower_is_better, value_format) in zip(
-        axes, specs
-    ):
+    for axis, (key, title, limits, value_format, display_scale) in zip(axes, specs):
+        plot_frame = frame.copy()
+        plot_frame["display_value"] = plot_frame[key] * display_scale
         sns.barplot(
-            data=frame,
+            data=plot_frame,
             x="model_label",
-            y=key,
-            hue="backend_label",
-            palette=palette,
+            y="display_value",
+            color="#4C78A8",
             errorbar=None,
             ax=axis,
         )
@@ -451,22 +573,14 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
         axis.set_xlabel("")
         axis.set_ylabel("")
         if limits:
-            axis.set_ylim(*limits)
+            axis.set_ylim(limits[0] * display_scale, limits[1] * display_scale)
         for container in axis.containers:
             axis.bar_label(container, fmt=value_format, padding=3, fontsize=9)
-        if lower_is_better:
-            axis.text(
-                0.98, 0.96, "lower is better", transform=axis.transAxes,
-                ha="right", va="top", fontsize=9, color="#666666",
-            )
-        if axis is not axes[0] and axis.legend_ is not None:
-            axis.legend_.remove()
         axis.tick_params(axis="x", rotation=15)
-    axes[0].legend(title="Backend", frameon=True, loc="lower left")
     sns.despine(fig=figure)
-    backend_names = ", ".join(frame["backend_label"].drop_duplicates())
+    backend_names = ", ".join(frame["backend"].str.upper().drop_duplicates())
     figure.suptitle(
-        f"YOLO Nano Zero-shot Verification — {backend_names}",
+        f"Camera Object Verification — {backend_names}",
         fontsize=17,
         weight="bold",
         y=1.02,
@@ -477,3 +591,157 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
         facecolor="white",
     )
     plt.close(figure)
+
+    class_order = list(results[0]["per_class_primary_label_metrics"])
+    model_order = frame["model_label"].tolist()
+    target_accept_matrix = np.asarray(
+        [
+            [
+                result["per_class_primary_label_metrics"][name][
+                    "expected_label_accept_rate"
+                ]
+                for name in class_order
+            ]
+            for result in results
+        ]
+    )
+    additional_activation_matrix = np.asarray(
+        [
+            [
+                result["per_class_primary_label_metrics"][name][
+                    "additional_label_activation_rate"
+                ]
+                for name in class_order
+            ]
+            for result in results
+        ]
+    )
+    class_figure, class_axes = plt.subplots(1, 2, figsize=(14, 5.5))
+    for axis, matrix, title, color in (
+        (class_axes[0], target_accept_matrix, "Expected Label Accept Rate ↑", "Blues"),
+        (
+            class_axes[1],
+            additional_activation_matrix,
+            "Additional Label Activation (not confirmed false)",
+            "Oranges",
+        ),
+    ):
+        sns.heatmap(
+            matrix,
+            annot=True,
+            fmt=".1%",
+            vmin=0,
+            vmax=1,
+            cmap=color,
+            xticklabels=class_order,
+            yticklabels=model_order,
+            cbar=False,
+            linewidths=0.5,
+            ax=axis,
+        )
+        axis.set_title(title, weight="bold")
+        axis.set_xlabel("Folder label (known-present object)")
+        axis.set_ylabel("")
+        axis.tick_params(axis="x", rotation=0)
+        axis.tick_params(axis="y", rotation=0)
+    class_figure.suptitle(
+        f"Per-class Camera Verification — {backend_names}",
+        fontsize=16,
+        weight="bold",
+        y=1.02,
+    )
+    class_figure.tight_layout()
+    class_figure.savefig(
+        output_dir / "verification_by_class.png",
+        dpi=220,
+        bbox_inches="tight",
+        facecolor="white",
+    )
+    plt.close(class_figure)
+
+    if "book" in class_order:
+        outcome_order = [*class_order, "unknown"]
+        outcome_colors = {
+            "bicycle": "#4C78A8",
+            "book": "#59A14F",
+            "guitar": "#F28E2B",
+            "laptop": "#E15759",
+            "unknown": "#BAB0AC",
+        }
+        book_figure, book_axes = plt.subplots(1, 2, figsize=(14, 6))
+        for axis, metric_key, title in (
+            (book_axes[0], "raw_top1", "Raw Top-1 Among Four Target Classes"),
+            (book_axes[1], "final_top1", "Final Top-1 After Threshold"),
+        ):
+            bottoms = np.zeros(len(results), dtype=float)
+            totals = np.asarray(
+                [
+                    sum(
+                        result["top1_outcomes_by_primary_label"]["book"][
+                            metric_key
+                        ].values()
+                    )
+                    for result in results
+                ],
+                dtype=float,
+            )
+            for outcome in outcome_order:
+                values = np.asarray(
+                    [
+                        result["top1_outcomes_by_primary_label"]["book"][
+                            metric_key
+                        ].get(outcome, 0)
+                        for result in results
+                    ],
+                    dtype=float,
+                )
+                bars = axis.bar(
+                    model_order,
+                    values,
+                    bottom=bottoms,
+                    label=outcome,
+                    color=outcome_colors[outcome],
+                )
+                for bar, value, bottom, total in zip(
+                    bars, values, bottoms, totals
+                ):
+                    if value:
+                        axis.text(
+                            bar.get_x() + bar.get_width() / 2,
+                            bottom + value / 2,
+                            f"{int(value)}\n({value / total:.0%})",
+                            ha="center",
+                            va="center",
+                            fontsize=9,
+                            color="white" if outcome != "unknown" else "black",
+                            weight="bold",
+                        )
+                bottoms += values
+            axis.set_title(title, weight="bold")
+            axis.set_xlabel("")
+            axis.set_ylabel("Book-folder images")
+            axis.set_ylim(0, max(totals) * 1.08)
+            axis.tick_params(axis="x", rotation=15)
+        handles, labels = book_axes[1].get_legend_handles_labels()
+        book_figure.legend(
+            handles,
+            labels,
+            title="Top-1 outcome",
+            loc="lower center",
+            ncol=len(outcome_order),
+            bbox_to_anchor=(0.5, -0.03),
+        )
+        book_figure.suptitle(
+            f"Book Images: Top-1 Outcome — {backend_names}",
+            fontsize=16,
+            weight="bold",
+            y=1.02,
+        )
+        book_figure.tight_layout(rect=(0, 0.08, 1, 1))
+        book_figure.savefig(
+            output_dir / "book_top1_outcomes.png",
+            dpi=220,
+            bbox_inches="tight",
+            facecolor="white",
+        )
+        plt.close(book_figure)
