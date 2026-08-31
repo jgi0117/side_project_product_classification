@@ -134,6 +134,68 @@ def _predict_scores(
     )
 
 
+def _primary_label_operating_metrics(
+    targets: list[int] | np.ndarray,
+    accepted: np.ndarray,
+    classes: list[str],
+) -> dict[str, Any]:
+    """Metrics that remain valid when folder labels are not exhaustive.
+
+    A folder label is treated as one object known to be present. Other accepted
+    labels are reported as additional activations, not false positives, because
+    another configured object may also be visible in the same image.
+    """
+    target_array = np.asarray(targets, dtype=int)
+    accepted_array = np.asarray(accepted, dtype=bool)
+    expected_shape = (len(target_array), len(classes))
+    if accepted_array.shape != expected_shape:
+        raise ValueError(
+            f"accepted shape must be {expected_shape}, got {accepted_array.shape}"
+        )
+
+    accepted_counts = accepted_array.sum(axis=1)
+    expected_accepted = accepted_array[np.arange(len(target_array)), target_array]
+    per_class: dict[str, dict[str, float | int]] = {}
+    target_accept_rates: list[float] = []
+    additional_activation_rates: list[float] = []
+    for index, name in enumerate(classes):
+        rows = target_array == index
+        image_count = int(rows.sum())
+        row_accepts = accepted_array[rows]
+        target_accept_rate = float(row_accepts[:, index].mean())
+        additional_mask = row_accepts.copy()
+        additional_mask[:, index] = False
+        additional_activation_rate = float(np.any(additional_mask, axis=1).mean())
+        target_accept_rates.append(target_accept_rate)
+        additional_activation_rates.append(additional_activation_rate)
+        per_class[name] = {
+            "images": image_count,
+            "expected_label_accepts": int(row_accepts[:, index].sum()),
+            "expected_label_rejects": int((~row_accepts[:, index]).sum()),
+            "expected_label_accept_rate": target_accept_rate,
+            "expected_label_reject_rate": float(1.0 - target_accept_rate),
+            "additional_label_activation_rate": additional_activation_rate,
+        }
+
+    return {
+        "expected_label_accept_rate_macro": float(
+            statistics.fmean(target_accept_rates)
+        ),
+        "expected_label_reject_rate_macro": float(
+            statistics.fmean(1.0 - rate for rate in target_accept_rates)
+        ),
+        "additional_label_activation_rate_macro": float(
+            statistics.fmean(additional_activation_rates)
+        ),
+        "multiple_label_rate": float(np.mean(accepted_counts > 1)),
+        "no_label_rate": float(np.mean(accepted_counts == 0)),
+        "expected_label_accepted_overall": float(expected_accepted.mean()),
+        "per_class_primary_label_metrics": per_class,
+        "label_semantics": "folder_label_is_known_present_but_not_exhaustive",
+        "false_accept_rate_available": False,
+    }
+
+
 def _measure_latency(
     model: Any,
     model_name: str,
@@ -248,6 +310,7 @@ def evaluate_zero_shot(
     )
     threshold_values = np.asarray([float(thresholds[name]) for name in classes])
     accepted = scores >= threshold_values
+    operating_metrics = _primary_label_operating_metrics(targets, accepted, classes)
     open_predictions = [
         prediction
         if scores[row, prediction] >= threshold_values[prediction]
@@ -343,13 +406,14 @@ def evaluate_zero_shot(
         "checkpoint": str(checkpoint),
         "model_size_mb": float(checkpoint.stat().st_size / (1024**2)),
         "mode": "zero_shot_imagenet_open_set_verification",
-        # Primary accuracy: four independent one-vs-rest verification tasks.
-        # A laptop is accepted from its own score, regardless of another
-        # target class receiving a higher score.
+        # Legacy single-label proxy metrics are retained for compatibility.
+        # They must not be interpreted as false-accept measurements because a
+        # folder label does not prove that other configured objects are absent.
         "accuracy": verification_accuracy,
         "auc_macro_ovr": float(auc),
         "verification_accuracy_macro": verification_accuracy,
         "verification_balanced_accuracy_macro": verification_balanced_accuracy,
+        **operating_metrics,
         "open_set_top1_accuracy": float(open_set_top1_accuracy),
         "per_class_auc": per_class_auc,
         "verification_thresholds": thresholds,
@@ -394,6 +458,11 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
         "auc_macro_ovr",
         "verification_accuracy_macro",
         "verification_balanced_accuracy_macro",
+        "expected_label_accept_rate_macro",
+        "expected_label_reject_rate_macro",
+        "additional_label_activation_rate_macro",
+        "multiple_label_rate",
+        "no_label_rate",
         "open_set_top1_accuracy",
         "latency_mean_ms",
         "latency_p50_ms",
@@ -424,26 +493,25 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
 
     frame = pd.DataFrame(results)
     frame["model_label"] = frame["model"].map(lambda value: Path(value).stem)
-    frame["backend_label"] = frame["backend"].str.upper()
     sns.set_theme(style="whitegrid", context="talk", font_scale=0.85)
-    palette = {"PYTORCH": "#4C78A8", "ONNX": "#F58518"}
-    figure, axes_grid = plt.subplots(2, 2, figsize=(13, 10))
+    figure, axes_grid = plt.subplots(2, 3, figsize=(17, 10))
     axes = axes_grid.flatten()
     specs = [
-        ("accuracy", "Verification Accuracy", (0, 1), False, "%.3f"),
-        ("auc_macro_ovr", "Macro OvR AUC", (0, 1), False, "%.3f"),
-        ("latency_mean_ms", "Latency (ms/image)", None, True, "%.2f"),
-        ("model_size_mb", "Model Size (MiB)", None, True, "%.2f"),
+        ("expected_label_accept_rate_macro", "Expected Label Accept Rate ↑", (0, 1), "%.1f%%", 100),
+        ("expected_label_reject_rate_macro", "Expected Label Reject Rate ↓", (0, 1), "%.1f%%", 100),
+        ("additional_label_activation_rate_macro", "Additional Label Activation", (0, 1), "%.1f%%", 100),
+        ("multiple_label_rate", "Multiple-label Rate", (0, 1), "%.1f%%", 100),
+        ("latency_mean_ms", "Latency (ms/image) ↓", None, "%.2f", 1),
+        ("model_size_mb", "Model Size (MiB) ↓", None, "%.2f", 1),
     ]
-    for axis, (key, title, limits, lower_is_better, value_format) in zip(
-        axes, specs
-    ):
+    for axis, (key, title, limits, value_format, display_scale) in zip(axes, specs):
+        plot_frame = frame.copy()
+        plot_frame["display_value"] = plot_frame[key] * display_scale
         sns.barplot(
-            data=frame,
+            data=plot_frame,
             x="model_label",
-            y=key,
-            hue="backend_label",
-            palette=palette,
+            y="display_value",
+            color="#4C78A8",
             errorbar=None,
             ax=axis,
         )
@@ -451,22 +519,14 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
         axis.set_xlabel("")
         axis.set_ylabel("")
         if limits:
-            axis.set_ylim(*limits)
+            axis.set_ylim(limits[0] * display_scale, limits[1] * display_scale)
         for container in axis.containers:
             axis.bar_label(container, fmt=value_format, padding=3, fontsize=9)
-        if lower_is_better:
-            axis.text(
-                0.98, 0.96, "lower is better", transform=axis.transAxes,
-                ha="right", va="top", fontsize=9, color="#666666",
-            )
-        if axis is not axes[0] and axis.legend_ is not None:
-            axis.legend_.remove()
         axis.tick_params(axis="x", rotation=15)
-    axes[0].legend(title="Backend", frameon=True, loc="lower left")
     sns.despine(fig=figure)
-    backend_names = ", ".join(frame["backend_label"].drop_duplicates())
+    backend_names = ", ".join(frame["backend"].str.upper().drop_duplicates())
     figure.suptitle(
-        f"YOLO Nano Zero-shot Verification — {backend_names}",
+        f"Camera Object Verification — {backend_names}",
         fontsize=17,
         weight="bold",
         y=1.02,
@@ -477,3 +537,70 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
         facecolor="white",
     )
     plt.close(figure)
+
+    class_order = list(results[0]["per_class_primary_label_metrics"])
+    model_order = frame["model_label"].tolist()
+    target_accept_matrix = np.asarray(
+        [
+            [
+                result["per_class_primary_label_metrics"][name][
+                    "expected_label_accept_rate"
+                ]
+                for name in class_order
+            ]
+            for result in results
+        ]
+    )
+    additional_activation_matrix = np.asarray(
+        [
+            [
+                result["per_class_primary_label_metrics"][name][
+                    "additional_label_activation_rate"
+                ]
+                for name in class_order
+            ]
+            for result in results
+        ]
+    )
+    class_figure, class_axes = plt.subplots(1, 2, figsize=(14, 5.5))
+    for axis, matrix, title, color in (
+        (class_axes[0], target_accept_matrix, "Expected Label Accept Rate ↑", "Blues"),
+        (
+            class_axes[1],
+            additional_activation_matrix,
+            "Additional Label Activation (not confirmed false)",
+            "Oranges",
+        ),
+    ):
+        sns.heatmap(
+            matrix,
+            annot=True,
+            fmt=".1%",
+            vmin=0,
+            vmax=1,
+            cmap=color,
+            xticklabels=class_order,
+            yticklabels=model_order,
+            cbar=False,
+            linewidths=0.5,
+            ax=axis,
+        )
+        axis.set_title(title, weight="bold")
+        axis.set_xlabel("Folder label (known-present object)")
+        axis.set_ylabel("")
+        axis.tick_params(axis="x", rotation=0)
+        axis.tick_params(axis="y", rotation=0)
+    class_figure.suptitle(
+        f"Per-class Camera Verification — {backend_names}",
+        fontsize=16,
+        weight="bold",
+        y=1.02,
+    )
+    class_figure.tight_layout()
+    class_figure.savefig(
+        output_dir / "verification_by_class.png",
+        dpi=220,
+        bbox_inches="tight",
+        facecolor="white",
+    )
+    plt.close(class_figure)

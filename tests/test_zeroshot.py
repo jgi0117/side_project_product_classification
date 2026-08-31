@@ -3,10 +3,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from yolo_benchmark.benchmark import _resolve_imagenet_indices  # noqa: E402
+from yolo_benchmark.benchmark import (  # noqa: E402
+    _primary_label_operating_metrics,
+    _resolve_imagenet_indices,
+)
 
 
 def test_imagenet_patterns_resolve_four_target_classes() -> None:
@@ -43,3 +48,28 @@ def test_imagenet_patterns_resolve_four_target_classes() -> None:
         "book jacket, dust cover, dust jacket, dust wrapper",
         "comic book",
     ]
+
+
+def test_primary_label_metrics_do_not_call_additional_objects_false_positives() -> None:
+    classes = ["bicycle", "book", "guitar", "laptop"]
+    targets = [0, 1, 2, 3]
+    accepted = np.asarray(
+        [
+            [True, False, False, False],
+            [False, True, False, True],
+            [False, False, True, False],
+            [False, False, False, True],
+        ]
+    )
+
+    metrics = _primary_label_operating_metrics(targets, accepted, classes)
+
+    assert metrics["expected_label_accept_rate_macro"] == 1.0
+    assert metrics["multiple_label_rate"] == 0.25
+    assert metrics["false_accept_rate_available"] is False
+    assert (
+        metrics["per_class_primary_label_metrics"]["book"][
+            "additional_label_activation_rate"
+        ]
+        == 1.0
+    )
