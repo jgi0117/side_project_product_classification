@@ -116,6 +116,26 @@ book 성능 차이가 모델 선택에 더 중요한 요소입니다.
 
 ![클래스별 승인율과 추가 라벨 활성화율](docs/assets/yolo_pytorch_by_class.png)
 
+### 책 이미지의 top-1 결과
+
+아래 왼쪽 그래프는 임계값을 적용하기 전에 네 목표 클래스 중 점수가 가장 높았던
+라벨이고, 오른쪽 그래프는 `top_k: 1`과 클래스 임계값 0.05를 모두 적용한 최종
+결과입니다.
+
+| 모델 | 임계값 전 book 1위 | 임계값 후 book 승인 | 다른 클래스 승인 | unknown |
+|---|---:|---:|---:|---:|
+| YOLOv8n-cls | 12/19 (63%) | 3/19 (16%) | 2/19 laptop | 14/19 (74%) |
+| YOLO11n-cls | 12/19 (63%) | 5/19 (26%) | 1/19 laptop | 13/19 (68%) |
+| YOLO26n-cls | 15/19 (79%) | 4/19 (21%) | 1/19 laptop | 14/19 (74%) |
+
+YOLOv8n의 임계값 전 나머지 결과는 laptop 5장, guitar 1장, bicycle 1장이고,
+YOLO11n은 laptop 7장, YOLO26n은 laptop 4장입니다. 세 모델 모두 book이 원점수
+1위인 이미지는 최종 승인 수보다 훨씬 많습니다. 따라서 book 성능 저하의 핵심은
+다른 세 클래스보다 순위가 낮아서라기보다 book 절대 점수가 0.05를 넘지 못해
+unknown으로 거부되는 현상입니다.
+
+![책 이미지의 top-1 및 최종 승인 결과](docs/assets/yolo_book_top1_outcomes.png)
+
 ### 책 성능 저하 분석
 
 책 성능이 낮은 주된 원인은 모델 크기보다 현재 zero-shot 매핑과 실제 이미지의
@@ -244,6 +264,7 @@ outputs/benchmark/
 │  ├─ summary.json
 │  ├─ comparison.png
 │  ├─ verification_by_class.png
+│  ├─ book_top1_outcomes.png
 │  ├─ yolov8n-cls/predictions.csv
 │  ├─ yolo11n-cls/...
 │  └─ yolo26n-cls/...
@@ -252,6 +273,7 @@ outputs/benchmark/
    ├─ summary.json
    ├─ comparison.png
    ├─ verification_by_class.png
+   ├─ book_top1_outcomes.png
    ├─ yolov8n-cls/predictions.csv
    ├─ yolo11n-cls/...
    └─ yolo26n-cls/...
@@ -260,7 +282,10 @@ outputs/benchmark/
 각 backend의 `comparison.png`는 주 객체 승인/거부, 추가 라벨 및 복수 라벨 활성화,
 추론시간, 모델 크기로 세 YOLO 모델을 비교하는 2×3 그래프입니다.
 `verification_by_class.png`는 책·자전거·기타·노트북별 주 객체 승인율과 추가 라벨
-활성화율 heatmap입니다. 같은 값은 `summary.csv`와 `summary.json`에도 기록됩니다.
+활성화율 heatmap입니다. `book_top1_outcomes.png`는 book 이미지의 임계값 전 원점수
+1위와 top-k 및 임계값 적용 후 결과를 비교합니다. 종합 지표는 `summary.csv`와
+`summary.json`에, top-1 세부 분포는 `summary.json`과 모델별 `metrics.json`에
+기록됩니다.
 기존 추론 결과는 `python scripts/regenerate_reports.py`로 재추론 없이 새 그래프로
 다시 만들 수 있습니다. 각 실행의
 `metrics.json`에는 실제 매칭된 ImageNet 클래스명, 임계값, 클래스별 이미지 수,

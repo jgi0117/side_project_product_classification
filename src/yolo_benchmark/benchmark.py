@@ -218,6 +218,33 @@ def _apply_top_k_thresholds(
     return accepted
 
 
+def _top1_outcomes_by_primary_label(
+    targets: list[int] | np.ndarray,
+    predictions: list[int] | np.ndarray,
+    open_predictions: list[int] | np.ndarray,
+    classes: list[str],
+) -> dict[str, dict[str, dict[str, int]]]:
+    """Count raw and thresholded top-1 outcomes for each primary label."""
+    target_array = np.asarray(targets, dtype=int)
+    prediction_array = np.asarray(predictions, dtype=int)
+    open_prediction_array = np.asarray(open_predictions, dtype=int)
+    outcomes: dict[str, dict[str, dict[str, int]]] = {}
+    for target_index, target_name in enumerate(classes):
+        rows = target_array == target_index
+        raw_counts = Counter(classes[index] for index in prediction_array[rows])
+        final_counts = Counter(
+            classes[index] if index < len(classes) else "unknown"
+            for index in open_prediction_array[rows]
+        )
+        outcomes[target_name] = {
+            "raw_top1": {name: int(raw_counts[name]) for name in classes},
+            "final_top1": {
+                name: int(final_counts[name]) for name in [*classes, "unknown"]
+            },
+        }
+    return outcomes
+
+
 def _measure_latency(
     model: Any,
     model_name: str,
@@ -340,6 +367,9 @@ def evaluate_zero_shot(
         else len(classes)
         for row, prediction in enumerate(predictions)
     ]
+    top1_outcomes = _top1_outcomes_by_primary_label(
+        targets, predictions, open_predictions, classes
+    )
     open_set_top1_accuracy = accuracy_score(targets, open_predictions)
     binary_accuracies = []
     binary_balanced_accuracies = []
@@ -439,6 +469,7 @@ def evaluate_zero_shot(
         "per_class_auc": per_class_auc,
         "verification_thresholds": thresholds,
         "top_k": top_k,
+        "top1_outcomes_by_primary_label": top1_outcomes,
         "latency_mean_ms": float(mean_latency),
         "latency_p50_ms": float(np.percentile(latencies, 50)),
         "latency_p95_ms": float(np.percentile(latencies, 95)),
@@ -627,3 +658,90 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
         facecolor="white",
     )
     plt.close(class_figure)
+
+    if "book" in class_order:
+        outcome_order = [*class_order, "unknown"]
+        outcome_colors = {
+            "bicycle": "#4C78A8",
+            "book": "#59A14F",
+            "guitar": "#F28E2B",
+            "laptop": "#E15759",
+            "unknown": "#BAB0AC",
+        }
+        book_figure, book_axes = plt.subplots(1, 2, figsize=(14, 6))
+        for axis, metric_key, title in (
+            (book_axes[0], "raw_top1", "Raw Top-1 Among Four Target Classes"),
+            (book_axes[1], "final_top1", "Final Top-1 After Threshold"),
+        ):
+            bottoms = np.zeros(len(results), dtype=float)
+            totals = np.asarray(
+                [
+                    sum(
+                        result["top1_outcomes_by_primary_label"]["book"][
+                            metric_key
+                        ].values()
+                    )
+                    for result in results
+                ],
+                dtype=float,
+            )
+            for outcome in outcome_order:
+                values = np.asarray(
+                    [
+                        result["top1_outcomes_by_primary_label"]["book"][
+                            metric_key
+                        ].get(outcome, 0)
+                        for result in results
+                    ],
+                    dtype=float,
+                )
+                bars = axis.bar(
+                    model_order,
+                    values,
+                    bottom=bottoms,
+                    label=outcome,
+                    color=outcome_colors[outcome],
+                )
+                for bar, value, bottom, total in zip(
+                    bars, values, bottoms, totals
+                ):
+                    if value:
+                        axis.text(
+                            bar.get_x() + bar.get_width() / 2,
+                            bottom + value / 2,
+                            f"{int(value)}\n({value / total:.0%})",
+                            ha="center",
+                            va="center",
+                            fontsize=9,
+                            color="white" if outcome != "unknown" else "black",
+                            weight="bold",
+                        )
+                bottoms += values
+            axis.set_title(title, weight="bold")
+            axis.set_xlabel("")
+            axis.set_ylabel("Book-folder images")
+            axis.set_ylim(0, max(totals) * 1.08)
+            axis.tick_params(axis="x", rotation=15)
+        handles, labels = book_axes[1].get_legend_handles_labels()
+        book_figure.legend(
+            handles,
+            labels,
+            title="Top-1 outcome",
+            loc="lower center",
+            ncol=len(outcome_order),
+            bbox_to_anchor=(0.5, -0.03),
+        )
+        book_figure.suptitle(
+            f"Book Images: Top-1 Outcome — {backend_names}",
+            fontsize=16,
+            weight="bold",
+            y=1.02,
+        )
+        book_figure.tight_layout(rect=(0, 0.08, 1, 1))
+        book_figure.savefig(
+            output_dir / "book_top1_outcomes.png",
+            dpi=220,
+            bbox_inches="tight",
+            facecolor="white",
+        )
+        plt.close(book_figure)

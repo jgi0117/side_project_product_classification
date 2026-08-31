@@ -12,6 +12,7 @@ from yolo_benchmark.benchmark import (  # noqa: E402
     _apply_top_k_thresholds,
     _primary_label_operating_metrics,
     _resolve_imagenet_indices,
+    _top1_outcomes_by_primary_label,
 )
 
 
@@ -86,3 +87,23 @@ def test_top_k_one_accepts_at_most_one_threshold_passing_label() -> None:
         [True, False, False, False],
         [False, False, False, False],
     ]
+
+
+def test_top1_outcomes_separate_raw_rank_from_thresholded_unknown() -> None:
+    classes = ["bicycle", "book", "guitar", "laptop"]
+
+    outcomes = _top1_outcomes_by_primary_label(
+        targets=[1, 1],
+        predictions=[1, 3],
+        open_predictions=[1, 4],
+        classes=classes,
+    )
+
+    assert outcomes["book"]["raw_top1"] == {
+        "bicycle": 0,
+        "book": 1,
+        "guitar": 0,
+        "laptop": 1,
+    }
+    assert outcomes["book"]["final_top1"]["book"] == 1
+    assert outcomes["book"]["final_top1"]["unknown"] == 1

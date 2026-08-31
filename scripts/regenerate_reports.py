@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from yolo_benchmark.benchmark import (  # noqa: E402
     _apply_top_k_thresholds,
     _primary_label_operating_metrics,
+    _top1_outcomes_by_primary_label,
     save_summary,
 )
 from yolo_benchmark.common import DEFAULT_CONFIG, load_config, write_json  # noqa: E402
@@ -62,6 +63,14 @@ def main() -> None:
             )
             accepted = _apply_top_k_thresholds(scores, threshold_values, top_k)
             predictions = np.argmax(scores, axis=1)
+            open_predictions = np.asarray(
+                [
+                    prediction
+                    if accepted[row_index, prediction]
+                    else len(classes)
+                    for row_index, prediction in enumerate(predictions)
+                ]
+            )
             for row_index, (row, target, prediction) in enumerate(
                 zip(rows, targets, predictions)
             ):
@@ -90,6 +99,11 @@ def main() -> None:
                 _primary_label_operating_metrics(targets, accepted, classes)
             )
             result["top_k"] = top_k
+            result["top1_outcomes_by_primary_label"] = (
+                _top1_outcomes_by_primary_label(
+                    targets, predictions, open_predictions, classes
+                )
+            )
             write_json(model_dir / "metrics.json", result)
 
         save_summary(results, backend_dir)
