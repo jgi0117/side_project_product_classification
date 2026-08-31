@@ -136,6 +136,39 @@ unknown으로 거부되는 현상입니다.
 
 ![책 이미지의 top-1 및 최종 승인 결과](docs/assets/yolo_book_top1_outcomes.png)
 
+### 책 이미지의 원본 ImageNet-1K 예측 라벨
+
+앞의 top-1 그래프는 네 목표 클래스의 합산 점수만 비교합니다. 실제 ImageNet-1K
+전체 1,000개 클래스 중 원본 top-1을 확인하면 모델이 책 이미지를 어떤 시각적
+개념으로 해석했는지 더 직접적으로 볼 수 있습니다.
+
+| 모델 | `book_jacket` top-1 | `comic_book` top-1 | 대표적인 다른 top-1 라벨 |
+|---|---:|---:|---|
+| YOLOv8n-cls | 0/19 | 0/19 | menu 2, web_site 2, bookcase 1, screen 1 |
+| YOLO11n-cls | 2/19 | 0/19 | crossword_puzzle 2, menu 1, shield 1, screen 1 |
+| YOLO26n-cls | 3/19 | 0/19 | crossword_puzzle 1, bookshop 1, menu 1, vestment 1 |
+
+세 모델에서 현재 book으로 매핑된 원본 클래스가 top-1인 경우는 총 5/57회뿐이고,
+`comic_book`은 한 번도 top-1이 아닙니다. 반복적으로 등장하는 `menu`,
+`crossword_puzzle`, `web_site`, `screen`은 펼친 페이지나 인쇄물의 레이아웃을,
+`CD_player`, `accordion`, `matchstick`, `photocopier` 등은 책의 직사각형 외형,
+페이지 선 또는 주변 장면을 잘못 해석한 결과로 볼 수 있습니다.
+
+`bookcase`, `bookshop`, `crossword_puzzle`처럼 책과 관련된 ImageNet 클래스도 일부
+나오지만 이를 모두 book 매핑에 추가하는 것은 안전하지 않습니다. 책장이나 서점
+사진, 퍼즐 화면만으로도 인증이 통과할 수 있기 때문입니다. 이 결과는 패턴을
+무작정 확장하기보다 실제 책 형태를 학습한 모델이 필요하다는 근거입니다.
+
+![책 이미지의 원본 ImageNet top-1 라벨](docs/assets/yolo_book_imagenet_top1_labels.png)
+
+각 이미지와 모델의 원본 ImageNet top-5 라벨 및 확률은
+[상세 CSV](docs/reports/yolo_book_imagenet_top5.csv)에서 확인할 수 있습니다. 다음
+명령으로 현재 이미지에 대한 분석 결과를 다시 생성할 수 있습니다.
+
+```powershell
+python scripts\analyze_book_imagenet_labels.py --top-k 5 --device cpu
+```
+
 ### 책 성능 저하 분석
 
 책 성능이 낮은 주된 원인은 모델 크기보다 현재 zero-shot 매핑과 실제 이미지의
@@ -265,6 +298,8 @@ outputs/benchmark/
 │  ├─ comparison.png
 │  ├─ verification_by_class.png
 │  ├─ book_top1_outcomes.png
+│  ├─ book_imagenet_top1_labels.png
+│  ├─ book_imagenet_topk.csv
 │  ├─ yolov8n-cls/predictions.csv
 │  ├─ yolo11n-cls/...
 │  └─ yolo26n-cls/...
@@ -285,7 +320,8 @@ outputs/benchmark/
 활성화율 heatmap입니다. `book_top1_outcomes.png`는 book 이미지의 임계값 전 원점수
 1위와 top-k 및 임계값 적용 후 결과를 비교합니다. 종합 지표는 `summary.csv`와
 `summary.json`에, top-1 세부 분포는 `summary.json`과 모델별 `metrics.json`에
-기록됩니다.
+기록됩니다. PyTorch의 `book_imagenet_top1_labels.png`와
+`book_imagenet_topk.csv`는 원본 ImageNet-1K 라벨 진단 결과입니다.
 기존 추론 결과는 `python scripts/regenerate_reports.py`로 재추론 없이 새 그래프로
 다시 만들 수 있습니다. 각 실행의
 `metrics.json`에는 실제 매칭된 ImageNet 클래스명, 임계값, 클래스별 이미지 수,
