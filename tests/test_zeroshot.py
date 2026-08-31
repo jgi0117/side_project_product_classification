@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from yolo_benchmark.benchmark import (  # noqa: E402
+    _apply_top_k_thresholds,
     _primary_label_operating_metrics,
     _resolve_imagenet_indices,
 )
@@ -73,3 +74,15 @@ def test_primary_label_metrics_do_not_call_additional_objects_false_positives() 
         ]
         == 1.0
     )
+
+
+def test_top_k_one_accepts_at_most_one_threshold_passing_label() -> None:
+    scores = np.asarray([[0.20, 0.18, 0.01, 0.10], [0.04, 0.03, 0.02, 0.01]])
+    thresholds = np.asarray([0.05, 0.05, 0.05, 0.05])
+
+    accepted = _apply_top_k_thresholds(scores, thresholds, top_k=1)
+
+    assert accepted.tolist() == [
+        [True, False, False, False],
+        [False, False, False, False],
+    ]

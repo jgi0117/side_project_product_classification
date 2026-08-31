@@ -100,6 +100,7 @@ def main() -> None:
                     classes=config["classes"],
                     patterns=config["imagenet_class_patterns"],
                     thresholds=config["verification_thresholds"],
+                    top_k=int(config["top_k"]),
                     onnx_simplify=bool(config["onnx"]["simplify"]),
                     device=device,
                     imgsz=int(config["imgsz"]),

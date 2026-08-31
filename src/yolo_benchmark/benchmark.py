@@ -196,6 +196,28 @@ def _primary_label_operating_metrics(
     }
 
 
+def _apply_top_k_thresholds(
+    scores: np.ndarray,
+    threshold_values: np.ndarray,
+    top_k: int,
+) -> np.ndarray:
+    """Accept threshold-passing labels only when they rank within top-k."""
+    score_array = np.asarray(scores, dtype=float)
+    thresholds = np.asarray(threshold_values, dtype=float)
+    if score_array.ndim != 2 or thresholds.shape != (score_array.shape[1],):
+        raise ValueError("scores and threshold_values have incompatible shapes")
+    if not 1 <= top_k <= score_array.shape[1]:
+        raise ValueError(f"top_k must be between 1 and {score_array.shape[1]}")
+
+    ranked_indices = np.argsort(-score_array, axis=1)[:, :top_k]
+    accepted = np.zeros_like(score_array, dtype=bool)
+    rows = np.arange(score_array.shape[0])[:, None]
+    accepted[rows, ranked_indices] = (
+        score_array[rows, ranked_indices] >= thresholds[ranked_indices]
+    )
+    return accepted
+
+
 def _measure_latency(
     model: Any,
     model_name: str,
@@ -290,6 +312,7 @@ def evaluate_zero_shot(
     speed_warmup: int,
     speed_repeats: int,
     thresholds: dict[str, float],
+    top_k: int,
     onnx_simplify: bool,
     items: list[ImageItem] | None = None,
     invalid_images: int = 0,
@@ -309,7 +332,7 @@ def evaluate_zero_shot(
         model, run_label, paths, classes, patterns, device, imgsz
     )
     threshold_values = np.asarray([float(thresholds[name]) for name in classes])
-    accepted = scores >= threshold_values
+    accepted = _apply_top_k_thresholds(scores, threshold_values, top_k)
     operating_metrics = _primary_label_operating_metrics(targets, accepted, classes)
     open_predictions = [
         prediction
@@ -381,9 +404,7 @@ def evaluate_zero_shot(
                     if accepted[row_index, index]
                 ) or "unknown",
                 "expected_class_score": float(probabilities[target]),
-                "expected_class_accepted": bool(
-                    probabilities[target] >= threshold_values[target]
-                ),
+                "expected_class_accepted": bool(accepted[row_index, target]),
                 "target_probability_mass": target_mass,
             }
             row.update(
@@ -417,6 +438,7 @@ def evaluate_zero_shot(
         "open_set_top1_accuracy": float(open_set_top1_accuracy),
         "per_class_auc": per_class_auc,
         "verification_thresholds": thresholds,
+        "top_k": top_k,
         "latency_mean_ms": float(mean_latency),
         "latency_p50_ms": float(np.percentile(latencies, 50)),
         "latency_p95_ms": float(np.percentile(latencies, 95)),
@@ -454,6 +476,7 @@ def save_summary(results: list[dict[str, Any]], output_dir: Path) -> None:
         "checkpoint",
         "model_size_mb",
         "mode",
+        "top_k",
         "accuracy",
         "auc_macro_ovr",
         "verification_accuracy_macro",

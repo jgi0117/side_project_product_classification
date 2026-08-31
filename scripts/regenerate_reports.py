@@ -12,14 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from yolo_benchmark.benchmark import (  # noqa: E402
+    _apply_top_k_thresholds,
     _primary_label_operating_metrics,
     save_summary,
 )
 from yolo_benchmark.common import DEFAULT_CONFIG, load_config, write_json  # noqa: E402
-
-
-def _as_bool(value: str) -> bool:
-    return value.strip().lower() == "true"
 
 
 def main() -> None:
@@ -33,6 +30,10 @@ def main() -> None:
     args = parser.parse_args()
     config = load_config(args.config)
     classes = list(config["classes"])
+    top_k = int(config["top_k"])
+    threshold_values = np.asarray(
+        [float(config["verification_thresholds"][name]) for name in classes]
+    )
     backends = ["pytorch", "onnx"] if args.backend == "both" else [args.backend]
 
     for backend in backends:
@@ -52,16 +53,43 @@ def main() -> None:
             ) as handle:
                 rows = list(csv.DictReader(handle))
             targets = [classes.index(row["true_label"]) for row in rows]
-            accepted = np.asarray(
+            scores = np.asarray(
                 [
-                    [_as_bool(row[f"accepted_{name}"]) for name in classes]
+                    [float(row[f"score_{name}"]) for name in classes]
                     for row in rows
                 ],
-                dtype=bool,
+                dtype=float,
             )
+            accepted = _apply_top_k_thresholds(scores, threshold_values, top_k)
+            predictions = np.argmax(scores, axis=1)
+            for row_index, (row, target, prediction) in enumerate(
+                zip(rows, targets, predictions)
+            ):
+                row["predicted_label"] = (
+                    classes[prediction]
+                    if accepted[row_index, prediction]
+                    else "unknown"
+                )
+                row["accepted_labels"] = ";".join(
+                    name
+                    for index, name in enumerate(classes)
+                    if accepted[row_index, index]
+                ) or "unknown"
+                row["expected_class_accepted"] = str(
+                    bool(accepted[row_index, target])
+                )
+                for index, name in enumerate(classes):
+                    row[f"accepted_{name}"] = str(bool(accepted[row_index, index]))
+            with (model_dir / "predictions.csv").open(
+                "w", encoding="utf-8-sig", newline=""
+            ) as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
             result.update(
                 _primary_label_operating_metrics(targets, accepted, classes)
             )
+            result["top_k"] = top_k
             write_json(model_dir / "metrics.json", result)
 
         save_summary(results, backend_dir)
