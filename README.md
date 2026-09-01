@@ -20,7 +20,7 @@ python scripts\run_oiv7_inference.py --config config\oiv7.yaml --device cpu
 ```
 
 평가 결과는 `outputs/oiv7/pretrained/predictions.csv`와 `metrics.json`에 저장됩니다.
-`predictions.csv`의 `oiv7_top1_label`은 601개 전체에서 고른 원본 top-1이고,
+`predictions.csv`의 `model_top1_label`은 601개 전체에서 고른 원본 top-1이고,
 `decision`은 사용자가 인증해야 할 클래스와의 일치 여부를 표현합니다. bbox 좌표는
 저장하지 않습니다. 모델 가중치는 최초 실행할 때 다운로드되므로 오프라인
 환경에서는 `--model`로 로컬 체크포인트를 지정해야 합니다.
@@ -43,6 +43,22 @@ python scripts\train_oiv7_detector.py `
 지정하려면 OIV7 전체 601개 `names`를 가진 YOLO dataset YAML이어야 합니다. 실제
 서비스 배포 전에는 Ultralytics 코드와 모델에 적용되는 AGPL-3.0 또는 Enterprise
 라이선스 조건을 별도로 확인해야 합니다.
+
+## COCO 사전학습 모델 zero-shot 실험
+
+COCO에는 일반적인 `bicycle`, `book`, `laptop` 클래스가 있지만 `guitar`는
+없습니다. 따라서 이 실험은 guitar 폴더를 읽지 않고 세 클래스만 평가합니다.
+예측 단계에서는 세 클래스로 선필터링하지 않으며, COCO 80개 전체 detection 중
+confidence top-1을 `model_top1_label` 컬럼에 그대로 기록합니다. 이 컬럼명은 두
+detector 실험의 결과 형식을 맞추기 위해 공통으로 사용합니다.
+
+```powershell
+python scripts\run_coco_inference.py --device cpu
+```
+
+GPU를 사용하려면 `--device 0`을 지정합니다. 결과는
+`outputs/coco/pretrained/predictions.csv`와 `metrics.json`에 저장됩니다. 이 과정은
+COCO 사전학습 가중치를 그대로 사용하며 추가 학습을 수행하지 않습니다.
 
 Google Drive에 있는 이미지에 별도 학습이나 fine-tuning을 수행하지 않고,
 ImageNet-1K 사전학습 분류 모델인 `YOLOv8n-cls`, `YOLO11n-cls`,

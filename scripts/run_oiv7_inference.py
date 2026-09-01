@@ -13,11 +13,14 @@ from yolo_benchmark.data import discover_images  # noqa: E402
 from yolo_benchmark.oiv7 import evaluate_oiv7  # noqa: E402
 
 
-def main() -> None:
+def main(
+    default_config: Path = ROOT / "config" / "oiv7.yaml",
+    description: str = "OIV7 사전학습 YOLOv8n의 전체 601-class top-1 인증 평가",
+) -> None:
     parser = argparse.ArgumentParser(
-        description="OIV7 사전학습 YOLOv8n의 전체 601-class top-1 인증 평가"
+        description=description
     )
-    parser.add_argument("--config", default=str(ROOT / "config" / "oiv7.yaml"))
+    parser.add_argument("--config", default=str(default_config))
     parser.add_argument("--source", type=Path)
     parser.add_argument("--model")
     parser.add_argument("--device")

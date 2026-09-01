@@ -1,0 +1,33 @@
+# COCO로 사전학습된 YOLOv8n detection 모델의 zero-shot 실험 설정입니다.
+drive_folder_url: 'https://drive.google.com/drive/folders/18mUVx75GlJyRX6vUnw4zDWEWwwrPR8Fg?usp=sharing'
+raw_dir: 'G:/My Drive/side_project/sample'
+model_dir: models/weights
+output_dir: outputs/coco
+
+model: yolov8n.pt
+
+# COCO에 guitar 클래스가 없으므로 guitar 폴더는 이번 평가에서 읽지 않습니다.
+classes:
+  - bicycle
+  - book
+  - laptop
+
+target_model_labels:
+  bicycle: bicycle
+  book: book
+  laptop: laptop
+
+# COCO 80개 전체 클래스 중 원본 confidence top-1이 요청 라벨과 같을 때만
+# 아래 임계값을 적용해 pass/reject를 결정합니다.
+verification_thresholds:
+  bicycle: 0.25
+  book: 0.25
+  laptop: 0.25
+top_k: 1
+
+imgsz: 640
+model_confidence_floor: 0.001
+iou: 0.7
+max_det: 300
+device: auto
+seed: 42

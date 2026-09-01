@@ -27,7 +27,7 @@ def resolve_target_class_ids(
         index = normalized.get(model_label.strip().casefold())
         if index is None:
             raise ValueError(
-                f"체크포인트에서 OIV7 클래스 {model_label!r}를 찾지 못했습니다."
+                f"체크포인트에서 설정 클래스 {model_label!r}를 찾지 못했습니다."
             )
         resolved[target] = index
     return resolved
@@ -64,9 +64,9 @@ def _prediction_row(
     row: dict[str, Any] = {
         "file": item.source.relative_to(source).as_posix(),
         "true_label": item.label,
-        "oiv7_top1_class_id": raw_class_id,
-        "oiv7_top1_label": raw_label,
-        "oiv7_top1_score": raw_score,
+        "model_top1_class_id": raw_class_id,
+        "model_top1_label": raw_label,
+        "model_top1_score": raw_score,
         "decision": "pass" if expected_label_pass else "reject",
         "expected_label_pass": expected_label_pass,
         "all_detection_count": len(all_detections),
@@ -89,7 +89,7 @@ def evaluate_oiv7(
     iou: float,
     max_det: int,
 ) -> dict[str, Any]:
-    """Evaluate the unfiltered OIV7 top-1 as a bbox-free verification output."""
+    """Evaluate the unfiltered detector top-1 as a bbox-free verification output."""
     target_ids = resolve_target_class_ids(model.names, target_model_labels)
     paths: Iterable[str] = (str(item.source) for item in items)
     predictions = model.predict(
@@ -131,10 +131,13 @@ def evaluate_oiv7(
     acceptance_rates = {
         label: accepted_by_class[label] / counts[label] for label in classes
     }
-    raw_top1_counts = Counter(row["oiv7_top1_label"] for row in rows)
+    raw_top1_counts = Counter(row["model_top1_label"] for row in rows)
     metrics = {
-        "model": getattr(model, "ckpt_path", None) or "yolov8n-oiv7.pt",
-        "mode": "unfiltered OIV7 601-class detection top-1; bbox not exported",
+        "model": getattr(model, "ckpt_path", None) or "pretrained detector",
+        "mode": (
+            f"unfiltered {len(model.names)}-class detection top-1; "
+            "bbox not exported"
+        ),
         "images": len(rows),
         "class_counts": dict(counts),
         "target_class_ids": target_ids,
@@ -148,7 +151,7 @@ def evaluate_oiv7(
         ),
         "service_reject_rate": sum(not row["expected_label_pass"] for row in rows)
         / len(rows),
-        "oiv7_top1_label_counts": dict(raw_top1_counts.most_common()),
+        "model_top1_label_counts": dict(raw_top1_counts.most_common()),
     }
     write_json(output_dir / "metrics.json", metrics)
     return metrics
