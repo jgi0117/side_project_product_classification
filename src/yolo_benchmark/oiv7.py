@@ -5,10 +5,194 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from .common import write_json
 from .data import ImageItem
+
+
+def _save_class_summary(
+    rows: list[dict[str, Any]], classes: list[str], output_dir: Path
+) -> list[dict[str, Any]]:
+    summary_rows: list[dict[str, Any]] = []
+    for label in classes:
+        class_rows = [row for row in rows if row["true_label"] == label]
+        passed = sum(bool(row["expected_label_pass"]) for row in class_rows)
+        top1_counts = Counter(row["model_top1_label"] for row in class_rows)
+        common_label, common_count = top1_counts.most_common(1)[0]
+        summary_rows.append(
+            {
+                "class": label,
+                "images": len(class_rows),
+                "pass_count": passed,
+                "reject_count": len(class_rows) - passed,
+                "pass_rate": passed / len(class_rows),
+                "mean_top1_score": float(
+                    np.mean([row["model_top1_score"] for row in class_rows])
+                ),
+                "most_common_top1_label": common_label,
+                "most_common_top1_count": common_count,
+            }
+        )
+
+    with (output_dir / "class_summary.csv").open(
+        "w", newline="", encoding="utf-8-sig"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(summary_rows[0]))
+        writer.writeheader()
+        writer.writerows(summary_rows)
+    return summary_rows
+
+
+def _plot_verification_by_class(
+    summary_rows: list[dict[str, Any]], output_dir: Path
+) -> None:
+    labels = [row["class"] for row in summary_rows]
+    passed = np.array([row["pass_count"] for row in summary_rows])
+    rejected = np.array([row["reject_count"] for row in summary_rows])
+    totals = passed + rejected
+
+    figure, axis = plt.subplots(figsize=(9, 5.5))
+    positions = np.arange(len(labels))
+    axis.bar(positions, passed, label="Pass", color="#59A14F")
+    axis.bar(positions, rejected, bottom=passed, label="Reject", color="#E15759")
+    for index, (pass_count, total) in enumerate(zip(passed, totals)):
+        axis.text(
+            index,
+            total + max(totals) * 0.02,
+            f"{pass_count}/{total} ({pass_count / total:.1%})",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+    axis.set_xticks(positions, labels)
+    axis.set_ylabel("Images")
+    axis.set_title("Zero-shot Verification by Folder Label")
+    axis.set_ylim(0, max(totals) * 1.16)
+    axis.legend()
+    axis.grid(axis="y", alpha=0.2)
+    figure.tight_layout()
+    figure.savefig(output_dir / "verification_by_class.png", dpi=220)
+    plt.close(figure)
+
+
+def _top1_matrix(
+    rows: list[dict[str, Any]],
+    classes: list[str],
+    target_model_labels: dict[str, str],
+    limit: int = 12,
+) -> tuple[list[str], np.ndarray]:
+    overall = Counter(row["model_top1_label"] for row in rows)
+    selected = [label for label, _ in overall.most_common(limit)]
+    for label in target_model_labels.values():
+        if label in overall and label not in selected:
+            selected.append(label)
+    has_other = len(selected) < len(overall)
+    columns = selected + (["Other"] if has_other else [])
+    matrix = np.zeros((len(classes), len(columns)), dtype=int)
+    for row in rows:
+        row_index = classes.index(row["true_label"])
+        label = row["model_top1_label"]
+        if label in selected:
+            column_index = selected.index(label)
+        else:
+            column_index = len(columns) - 1
+        matrix[row_index, column_index] += 1
+    return columns, matrix
+
+
+def _plot_top1_by_true_class(
+    rows: list[dict[str, Any]],
+    classes: list[str],
+    target_model_labels: dict[str, str],
+    output_dir: Path,
+) -> None:
+    columns, matrix = _top1_matrix(rows, classes, target_model_labels)
+    width = max(11, len(columns) * 0.85)
+    figure, axis = plt.subplots(figsize=(width, 4.8))
+    image = axis.imshow(matrix, cmap="Blues", aspect="auto")
+    for row_index in range(matrix.shape[0]):
+        for column_index in range(matrix.shape[1]):
+            value = matrix[row_index, column_index]
+            if value:
+                axis.text(
+                    column_index,
+                    row_index,
+                    str(value),
+                    ha="center",
+                    va="center",
+                    color="white" if value > matrix.max() * 0.55 else "black",
+                    fontsize=9,
+                )
+    axis.set_xticks(range(len(columns)), columns, rotation=40, ha="right")
+    axis.set_yticks(range(len(classes)), classes)
+    axis.set_xlabel("Unfiltered model top-1 label")
+    axis.set_ylabel("Folder label")
+    axis.set_title("Top-1 Predictions Across the Full Pretrained Vocabulary")
+    figure.colorbar(image, ax=axis, label="Images")
+    figure.tight_layout()
+    figure.savefig(output_dir / "top1_by_true_class.png", dpi=220)
+    plt.close(figure)
+
+
+def _plot_book_top1_labels(
+    rows: list[dict[str, Any]], output_dir: Path, limit: int = 12
+) -> None:
+    book_rows = [row for row in rows if row["true_label"] == "book"]
+    if not book_rows:
+        return
+    counts = Counter(row["model_top1_label"] for row in book_rows)
+    shown = counts.most_common(limit)
+    shown_total = sum(count for _, count in shown)
+    if shown_total < len(book_rows):
+        shown.append(("Other", len(book_rows) - shown_total))
+    labels = [label for label, _ in shown][::-1]
+    values = [count for _, count in shown][::-1]
+
+    figure, axis = plt.subplots(figsize=(9, max(4.5, len(labels) * 0.42)))
+    axis.barh(labels, values, color="#4E79A7")
+    for index, value in enumerate(values):
+        axis.text(value + 0.08, index, str(value), va="center")
+    axis.set_xlabel("Book-folder images")
+    axis.set_title("Book Images: Unfiltered Model Top-1 Labels")
+    axis.set_xlim(0, max(values) * 1.2)
+    axis.grid(axis="x", alpha=0.2)
+    figure.tight_layout()
+    figure.savefig(output_dir / "book_top1_labels.png", dpi=220)
+    plt.close(figure)
+
+
+def _plot_confidence_by_class(
+    rows: list[dict[str, Any]], classes: list[str], output_dir: Path
+) -> None:
+    scores = [
+        [row["model_top1_score"] for row in rows if row["true_label"] == label]
+        for label in classes
+    ]
+    figure, axis = plt.subplots(figsize=(9, 5.5))
+    axis.boxplot(scores, labels=classes, showmeans=True)
+    axis.set_ylim(0, 1.02)
+    axis.set_ylabel("Unfiltered top-1 confidence")
+    axis.set_title("Top-1 Detection Confidence by Folder Label")
+    axis.grid(axis="y", alpha=0.2)
+    figure.tight_layout()
+    figure.savefig(output_dir / "confidence_by_class.png", dpi=220)
+    plt.close(figure)
+
+
+def save_detector_visualizations(
+    rows: list[dict[str, Any]],
+    classes: list[str],
+    target_model_labels: dict[str, str],
+    output_dir: Path,
+) -> list[dict[str, Any]]:
+    summary_rows = _save_class_summary(rows, classes, output_dir)
+    _plot_verification_by_class(summary_rows, output_dir)
+    _plot_top1_by_true_class(rows, classes, target_model_labels, output_dir)
+    _plot_book_top1_labels(rows, output_dir)
+    _plot_confidence_by_class(rows, classes, output_dir)
+    return summary_rows
 
 
 def resolve_target_class_ids(
@@ -120,6 +304,10 @@ def evaluate_oiv7(
         writer.writeheader()
         writer.writerows(rows)
 
+    class_summary = save_detector_visualizations(
+        rows, classes, target_model_labels, output_dir
+    )
+
     counts = Counter(row["true_label"] for row in rows)
     accepted_by_class = {
         label: sum(
@@ -152,6 +340,21 @@ def evaluate_oiv7(
         "service_reject_rate": sum(not row["expected_label_pass"] for row in rows)
         / len(rows),
         "model_top1_label_counts": dict(raw_top1_counts.most_common()),
+        "model_top1_label_counts_by_true_class": {
+            label: dict(
+                Counter(
+                    row["model_top1_label"]
+                    for row in rows
+                    if row["true_label"] == label
+                ).most_common()
+            )
+            for label in classes
+        },
+        "no_detection_rate": sum(
+            row["all_detection_count"] == 0 for row in rows
+        )
+        / len(rows),
+        "class_summary": class_summary,
     }
     write_json(output_dir / "metrics.json", metrics)
     return metrics

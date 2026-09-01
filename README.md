@@ -25,24 +25,9 @@ python scripts\run_oiv7_inference.py --config config\oiv7.yaml --device cpu
 저장하지 않습니다. 모델 가중치는 최초 실행할 때 다운로드되므로 오프라인
 환경에서는 `--model`로 로컬 체크포인트를 지정해야 합니다.
 
-601개 전체 출력을 유지하는 학습 코드는 Open Images V7 전체 detection dataset을
-사용합니다. Ultralytics 문서 기준 약 561GB를 내려받으므로 저장 공간과 학습 비용을
-먼저 확인해야 합니다. 현재 Drive의 4개 폴더 데이터로 파인튜닝하면 detection head가
-4개 클래스로 교체되어 이번 실험 목적과 달라지므로 학습 코드가 이를 거부합니다.
-
-```powershell
-python scripts\train_oiv7_detector.py `
-  --model yolov8n-oiv7.pt `
-  --epochs 100 `
-  --imgsz 640 `
-  --batch 16 `
-  --device 0
-```
-
-위 학습은 OIV7 가중치와 601-class detection head를 유지합니다. 별도 `--data`를
-지정하려면 OIV7 전체 601개 `names`를 가진 YOLO dataset YAML이어야 합니다. 실제
-서비스 배포 전에는 Ultralytics 코드와 모델에 적용되는 AGPL-3.0 또는 Enterprise
-라이선스 조건을 별도로 확인해야 합니다.
+현재 단계에서는 학습이나 fine-tuning 없이 공개 사전학습 가중치의 zero-shot
+성능만 평가합니다. 실제 서비스 배포 전에는 Ultralytics 코드와 모델에 적용되는
+AGPL-3.0 또는 Enterprise 라이선스 조건을 별도로 확인해야 합니다.
 
 ## COCO 사전학습 모델 zero-shot 실험
 
@@ -57,8 +42,26 @@ python scripts\run_coco_inference.py --device cpu
 ```
 
 GPU를 사용하려면 `--device 0`을 지정합니다. 결과는
-`outputs/coco/pretrained/predictions.csv`와 `metrics.json`에 저장됩니다. 이 과정은
-COCO 사전학습 가중치를 그대로 사용하며 추가 학습을 수행하지 않습니다.
+`outputs/coco/pretrained/`에 저장됩니다. 이 과정은 COCO 사전학습 가중치를 그대로
+사용하며 추가 학습을 수행하지 않습니다.
+
+두 detector zero-shot 실행은 다음 상세 결과를 공통으로 생성합니다.
+
+```text
+outputs/<oiv7|coco>/pretrained/
+├─ predictions.csv              # 이미지별 전체 vocabulary 원본 top-1
+├─ class_summary.csv            # 클래스별 pass/reject와 confidence 요약
+├─ metrics.json                 # 전체 및 클래스별 상세 집계
+├─ verification_by_class.png    # 폴더 클래스별 pass/reject
+├─ top1_by_true_class.png       # 폴더별 원본 top-1 라벨 heatmap
+├─ book_top1_labels.png         # book 이미지의 원본 top-1 분포
+└─ confidence_by_class.png      # 폴더별 원본 top-1 confidence 분포
+```
+
+`top1_by_true_class.png`와 `book_top1_labels.png`는 목표 클래스만으로 다시
+정규화하거나 필터링하지 않은 모델의 전체 vocabulary 예측을 시각화합니다. 폴더
+레이블은 이미지의 주 객체를 나타내는 proxy이므로, 다른 top-1 라벨을 확정 오탐으로
+해석하기 전에 실제 이미지에 해당 객체가 함께 있는지 확인해야 합니다.
 
 Google Drive에 있는 이미지에 별도 학습이나 fine-tuning을 수행하지 않고,
 ImageNet-1K 사전학습 분류 모델인 `YOLOv8n-cls`, `YOLO11n-cls`,
