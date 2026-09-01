@@ -1,6 +1,6 @@
 # COCO로 사전학습된 YOLOv8n detection 모델의 zero-shot 실험 설정입니다.
 drive_folder_url: 'https://drive.google.com/drive/folders/18mUVx75GlJyRX6vUnw4zDWEWwwrPR8Fg?usp=sharing'
-raw_dir: 'G:/My Drive/side_project/sample'
+raw_dir: 'G:/내 드라이브/side_project'
 model_dir: models/weights
 output_dir: outputs/coco
 

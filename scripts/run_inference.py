@@ -26,7 +26,10 @@ def find_mounted_sample(configured: Path) -> Path | None:
             [
                 drive / "My Drive" / "side_project" / "sample",
                 drive / "내 드라이브" / "side_project" / "sample",
+                drive / "My Drive" / "side_project",
+                drive / "내 드라이브" / "side_project",
                 drive / "side_project" / "sample",
+                drive / "side_project",
             ]
         )
     for candidate in candidates:
@@ -59,7 +62,7 @@ def main() -> None:
             f"브라우저 링크: {config.get('drive_folder_url', '(없음)')}\n"
             "Google Drive for desktop을 실행한 뒤 PowerShell에서 "
             "`Get-PSDrive -PSProvider FileSystem`과 `Get-ChildItem G:\\`로 "
-            "실제 드라이브 문자와 My Drive 폴더명을 확인하세요."
+            "실제 드라이브 문자와 내 드라이브 폴더명을 확인하세요."
         )
     if source != configured_source:
         print(f"Configured path not found; auto-detected Drive path: {source}")

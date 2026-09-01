@@ -311,14 +311,14 @@ python scripts\run_inference.py --config config\inference.yaml --backend both
 
 ```yaml
 drive_folder_url: 'https://drive.google.com/drive/folders/18mUVx75GlJyRX6vUnw4zDWEWwwrPR8Fg?usp=sharing'
-raw_dir: 'G:/My Drive/side_project/sample'
+raw_dir: 'G:/내 드라이브/side_project'
 ```
 
 `drive_folder_url`은 폴더 확인을 위한 참고값입니다. 브라우저 URL은 로컬 파일
 경로가 아니므로 Ultralytics가 직접 읽을 수 없습니다. `raw_dir`에는 Google
 Drive for desktop이 만든 실제 경로를 지정해야 합니다. 드라이브 문자나
 `My Drive`/`내 드라이브` 이름이 다르면 실행기가 Windows 드라이브에서
-`side_project/sample`을 자동 탐색합니다.
+`side_project`와 기존 `side_project/sample` 경로를 자동 탐색합니다.
 
 Drive 문자나 폴더명이 다르면 이 값만 수정합니다. YAML에서는 Windows 경로도
 역슬래시(`\`)보다 슬래시(`/`) 표기를 권장합니다. `--source`를 지정하면 YAML
@@ -329,7 +329,7 @@ backend, GPU 또는 한 모델만 빠르게 확인:
 ```powershell
 python scripts\run_inference.py --backend pytorch
 python scripts\run_inference.py --backend onnx
-python scripts\run_inference.py --source "G:\내 드라이브\side_project\sample" --device 0
+python scripts\run_inference.py --source "G:\내 드라이브\side_project" --device 0
 python scripts\run_inference.py --models yolov8n-cls.pt --backend both
 ```
 

@@ -1,7 +1,7 @@
 # Open Images V7로 사전학습된 YOLOv8n detection 모델 실험 설정입니다.
 # 모델은 최초 실행할 때 Ultralytics가 자동으로 다운로드합니다.
 drive_folder_url: 'https://drive.google.com/drive/folders/18mUVx75GlJyRX6vUnw4zDWEWwwrPR8Fg?usp=sharing'
-raw_dir: 'G:/My Drive/side_project/sample'
+raw_dir: 'G:/내 드라이브/side_project'
 model_dir: models/weights
 output_dir: outputs/oiv7
 
