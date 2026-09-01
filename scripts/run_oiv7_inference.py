@@ -23,12 +23,23 @@ def main(
     parser.add_argument("--config", default=str(default_config))
     parser.add_argument("--source", type=Path)
     parser.add_argument("--model")
+    parser.add_argument(
+        "--output-name",
+        default="pretrained",
+        help="output_dir 아래에 생성할 실험 폴더명",
+    )
     parser.add_argument("--device")
     args = parser.parse_args()
 
     config = load_config(args.config)
     if int(config["top_k"]) != 1:
         raise SystemExit("이 실험은 top_k: 1만 지원합니다.")
+    if (
+        not args.output_name
+        or Path(args.output_name).name != args.output_name
+        or args.output_name in {".", ".."}
+    ):
+        raise SystemExit("--output-name에는 경로가 아닌 폴더명 하나만 지정하세요.")
     source = (args.source or config["raw_dir"]).resolve()
     if not source.is_dir():
         raise SystemExit(f"이미지 루트 폴더를 찾지 못했습니다: {source}")
@@ -42,6 +53,7 @@ def main(
 
     model_name = args.model or str(config["model"])
     model = YOLO(model_name)
+    experiment_dir = config["output_dir"] / args.output_name
     metrics = evaluate_oiv7(
         model=model,
         source=source,
@@ -49,7 +61,7 @@ def main(
         classes=list(config["classes"]),
         target_model_labels=dict(config["target_model_labels"]),
         thresholds=dict(config["verification_thresholds"]),
-        output_dir=config["output_dir"] / "pretrained",
+        output_dir=experiment_dir,
         device=device,
         imgsz=int(config["imgsz"]),
         confidence_floor=float(config["model_confidence_floor"]),
@@ -60,7 +72,7 @@ def main(
         f"valid={len(items)}, invalid={invalid_images}, "
         f"macro_accept={metrics['expected_label_accept_rate_macro']:.3f}"
     )
-    print(f"결과: {(config['output_dir'] / 'pretrained').resolve()}")
+    print(f"결과: {experiment_dir.resolve()}")
 
 
 if __name__ == "__main__":

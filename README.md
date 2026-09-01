@@ -41,6 +41,18 @@ detector 실험의 결과 형식을 맞추기 위해 공통으로 사용합니�
 python scripts\run_coco_inference.py --device cpu
 ```
 
+YOLOv8s를 v8n 결과와 분리해 같은 조건으로 평가:
+
+```powershell
+python scripts\run_coco_inference.py `
+  --model yolov8s.pt `
+  --output-name yolov8s `
+  --device cpu
+```
+
+결과는 `outputs/coco/yolov8s/`에 저장됩니다. 기존 기본 실행 결과는
+`outputs/coco/pretrained/`에 유지되므로 서로 덮어쓰지 않습니다.
+
 GPU를 사용하려면 `--device 0`을 지정합니다. 결과는
 `outputs/coco/pretrained/`에 저장됩니다. 이 과정은 COCO 사전학습 가중치를 그대로
 사용하며 추가 학습을 수행하지 않습니다.
