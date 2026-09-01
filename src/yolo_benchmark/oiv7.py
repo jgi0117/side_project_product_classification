@@ -171,7 +171,7 @@ def _plot_confidence_by_class(
         for label in classes
     ]
     figure, axis = plt.subplots(figsize=(9, 5.5))
-    axis.boxplot(scores, labels=classes, showmeans=True)
+    axis.boxplot(scores, tick_labels=classes, showmeans=True)
     axis.set_ylim(0, 1.02)
     axis.set_ylabel("Unfiltered top-1 confidence")
     axis.set_title("Top-1 Detection Confidence by Folder Label")
