@@ -1,0 +1,39 @@
+# Open Images V7로 사전학습된 YOLOv8n detection 모델 실험 설정입니다.
+# 모델은 최초 실행할 때 Ultralytics가 자동으로 다운로드합니다.
+drive_folder_url: 'https://drive.google.com/drive/folders/18mUVx75GlJyRX6vUnw4zDWEWwwrPR8Fg?usp=sharing'
+raw_dir: 'G:/My Drive/side_project/sample'
+model_dir: models/weights
+output_dir: outputs/oiv7
+
+model: yolov8n-oiv7.pt
+classes:
+  - bicycle
+  - book
+  - guitar
+  - laptop
+
+# 체크포인트에 들어 있는 Open Images V7 클래스명입니다. 실행 시 실제
+# model.names와 대조하므로 클래스 순서가 달라져도 잘못된 ID를 사용하지 않습니다.
+target_model_labels:
+  bicycle: Bicycle
+  book: Book
+  guitar: Guitar
+  laptop: Laptop
+
+# 601개 전체 클래스 중 confidence가 가장 높은 detection 하나를 원본 top-1으로
+# 사용합니다. 아래 값은 그 원본 top-1이 서비스 목표 클래스일 때만 적용합니다.
+verification_thresholds:
+  bicycle: 0.25
+  book: 0.25
+  guitar: 0.25
+  laptop: 0.25
+top_k: 1
+
+imgsz: 640
+# Ultralytics의 기본 0.25에서 먼저 잘라내지 않고 전체 top-1을 관찰하기 위한
+# detection 하한입니다. 최종 승인 임계값과는 별개입니다.
+model_confidence_floor: 0.001
+iou: 0.7
+max_det: 300
+device: auto
+seed: 42

@@ -1,5 +1,49 @@
 # YOLO nano zero-shot verification benchmark
 
+> 현재 브랜치 `experiment/yolov8n-oiv7`에는 일반적인 `Book`, `Bicycle`,
+> `Guitar`, `Laptop` 클래스를 포함하는 Open Images V7 사전학습 detector 실험이
+> 추가되어 있습니다. 기존 ImageNet 분류 실험과 결과는 그대로 유지합니다.
+
+## Open Images V7 사전학습 모델 실험
+
+`yolov8n-oiv7.pt`는 Open Images V7의 601개 객체 클래스로 사전학습되며, 현재
+서비스의 네 목표 클래스가 별도 클래스 그대로 포함됩니다. 이 실험은 detector의
+bbox 좌표를 서비스 판정 결과로 내보내지 않습니다. **네 클래스로 먼저 필터링하지
+않고 601개 전체 detection 중 confidence top-1을 원본 예측으로 유지합니다.** 그
+원본 top-1이 `Bicycle`, `Book`, `Guitar`, `Laptop` 중 하나이고 해당 클래스
+임계값도 통과하며 사용자가 인증해야 할 라벨과 같을 때만 `pass`입니다. 다른 OIV7
+라벨을 `unknown`으로 치환하지 않고 원본 예측 라벨과 함께 `reject`로 기록합니다.
+
+```powershell
+# 추가 학습 없이 현재 폴더 데이터 평가
+python scripts\run_oiv7_inference.py --config config\oiv7.yaml --device cpu
+```
+
+평가 결과는 `outputs/oiv7/pretrained/predictions.csv`와 `metrics.json`에 저장됩니다.
+`predictions.csv`의 `oiv7_top1_label`은 601개 전체에서 고른 원본 top-1이고,
+`decision`은 사용자가 인증해야 할 클래스와의 일치 여부를 표현합니다. bbox 좌표는
+저장하지 않습니다. 모델 가중치는 최초 실행할 때 다운로드되므로 오프라인
+환경에서는 `--model`로 로컬 체크포인트를 지정해야 합니다.
+
+601개 전체 출력을 유지하는 학습 코드는 Open Images V7 전체 detection dataset을
+사용합니다. Ultralytics 문서 기준 약 561GB를 내려받으므로 저장 공간과 학습 비용을
+먼저 확인해야 합니다. 현재 Drive의 4개 폴더 데이터로 파인튜닝하면 detection head가
+4개 클래스로 교체되어 이번 실험 목적과 달라지므로 학습 코드가 이를 거부합니다.
+
+```powershell
+python scripts\train_oiv7_detector.py `
+  --model yolov8n-oiv7.pt `
+  --epochs 100 `
+  --imgsz 640 `
+  --batch 16 `
+  --device 0
+```
+
+위 학습은 OIV7 가중치와 601-class detection head를 유지합니다. 별도 `--data`를
+지정하려면 OIV7 전체 601개 `names`를 가진 YOLO dataset YAML이어야 합니다. 실제
+서비스 배포 전에는 Ultralytics 코드와 모델에 적용되는 AGPL-3.0 또는 Enterprise
+라이선스 조건을 별도로 확인해야 합니다.
+
 Google Drive에 있는 이미지에 별도 학습이나 fine-tuning을 수행하지 않고,
 ImageNet-1K 사전학습 분류 모델인 `YOLOv8n-cls`, `YOLO11n-cls`,
 `YOLO26n-cls`를 zero-shot transfer 방식으로 비교합니다. 여기서 zero-shot은
