@@ -1,0 +1,78 @@
+raw_dir: 'G:/내 드라이브/side_project'
+output_dir: outputs/coco_model_suite
+
+classes: [bicycle, book, laptop]
+target_model_labels:
+  bicycle: bicycle
+  book: book
+  laptop: laptop
+verification_thresholds:
+  bicycle: 0.25
+  book: 0.25
+  laptop: 0.25
+
+top_k: 1
+imgsz: 640
+model_confidence_floor: 0.001
+iou: 0.7
+max_det: 300
+device: cpu
+
+# 프레임워크 충돌을 피하기 위해 모델군마다 별도 가상환경을 사용합니다.
+# YOLOv8s는 비교 대상에서 제외했습니다.
+models:
+  - id: yolov8n
+    adapter: ultralytics
+    python: .venv/Scripts/python.exe
+    checkpoint: yolov8n.pt
+    allow_checkpoint_download: true
+
+  - id: rtmdet-tiny
+    adapter: rtmdet
+    python: .model_envs/rtmdet/Scripts/python.exe
+    checkpoint: models/pretrained/rtmdet_tiny.pth
+    model_config: rtmdet_tiny_8xb32-300e_coco
+    download:
+      url: https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth
+      destination: models/pretrained/rtmdet_tiny.pth
+      min_bytes: 10000000
+      sha256_prefix: 78e30dcc
+
+  - id: nanodet-plus-m-320
+    adapter: nanodet
+    python: .model_envs/nanodet/Scripts/python.exe
+    checkpoint: models/pretrained/nanodet-plus-m_320.pth
+    model_config: third_party/nanodet/config/nanodet-plus-m_320.yml
+    download:
+      url: 'https://drive.usercontent.google.com/download?id=1Dq0cTIdJDUhQxJe45z6rWncbZmOyh1Tv&export=download&confirm=t'
+      destination: models/pretrained/nanodet-plus-m_320.pth
+      min_bytes: 1000000
+
+  - id: picodet-s-320
+    adapter: picodet_onnx
+    python: .venv/Scripts/python.exe
+    checkpoint: models/pretrained/picodet_s_320_lcnet_postprocessed.onnx
+    download:
+      url: https://paddledet.bj.bcebos.com/deploy/third_engine/picodet_s_320_lcnet_postprocessed.onnx
+      destination: models/pretrained/picodet_s_320_lcnet_postprocessed.onnx
+      min_bytes: 1000000
+
+  - id: yolox-nano
+    adapter: yolox
+    python: .model_envs/yolox/Scripts/python.exe
+    checkpoint: models/pretrained/yolox_nano.pth
+    exp_name: yolox-nano
+    download:
+      url: https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.pth
+      destination: models/pretrained/yolox_nano.pth
+      min_bytes: 1000000
+
+  - id: yolox-tiny
+    adapter: yolox
+    python: .model_envs/yolox/Scripts/python.exe
+    checkpoint: models/pretrained/yolox_tiny.pth
+    exp_name: yolox-tiny
+    download:
+      url: https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_tiny.pth
+      destination: models/pretrained/yolox_tiny.pth
+      min_bytes: 1000000

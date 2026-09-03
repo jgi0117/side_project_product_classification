@@ -41,17 +41,17 @@ detector 실험의 결과 형식을 맞추기 위해 공통으로 사용합니�
 python scripts\run_coco_inference.py --device cpu
 ```
 
-YOLOv8s를 v8n 결과와 분리해 같은 조건으로 평가:
+기존 YOLOv8n만 다시 평가하면서 이전 결과를 덮어쓰지 않으려면:
 
 ```powershell
 python scripts\run_coco_inference.py `
-  --model yolov8s.pt `
-  --output-name yolov8s `
+  --model yolov8n.pt `
+  --output-name yolov8n-rerun `
   --device cpu
 ```
 
-결과는 `outputs/coco/yolov8s/`에 저장됩니다. 기존 기본 실행 결과는
-`outputs/coco/pretrained/`에 유지되므로 서로 덮어쓰지 않습니다.
+결과는 `outputs/coco/yolov8n-rerun/`에 저장됩니다. 기존 기본 실행 결과는
+`outputs/coco/pretrained/`에 유지됩니다. YOLOv8s는 현재 비교 대상에서 제외했습니다.
 
 GPU를 사용하려면 `--device 0`을 지정합니다. 결과는
 `outputs/coco/pretrained/`에 저장됩니다. 이 과정은 COCO 사전학습 가중치를 그대로
@@ -61,7 +61,7 @@ GPU를 사용하려면 `--device 0`을 지정합니다. 결과는
 
 ```text
 outputs/<oiv7|coco>/pretrained/
-├─ predictions.csv              # 이미지별 전체 vocabulary 원본 top-1
+├─ predictions.csv              # 이미지별 전체 vocabulary top-1과 처리 시간
 ├─ class_summary.csv            # 클래스별 pass/reject와 confidence 요약
 ├─ metrics.json                 # 전체 및 클래스별 상세 집계
 ├─ verification_by_class.png    # 폴더 클래스별 pass/reject
@@ -69,6 +69,113 @@ outputs/<oiv7|coco>/pretrained/
 ├─ book_top1_labels.png         # book 이미지의 원본 top-1 분포
 └─ confidence_by_class.png      # 폴더별 원본 top-1 confidence 분포
 ```
+
+`predictions.csv`에는 이미지별 `preprocess_ms`, `inference_ms`, `postprocess_ms`,
+`total_pipeline_ms`가 기록됩니다. `metrics.json`에는 각 시간의 평균/p50/p95,
+평균 시간 기반 FPS, 실제 체크포인트의 `model_size_mib`가 추가됩니다. 파일 탐색과
+모델 로딩 시간은 포함하지 않습니다.
+
+## COCO 경량 detector 일괄 비교
+
+다음 여섯 모델을 설정 순서대로 실행할 수 있습니다. YOLOv8s는 포함하지 않습니다.
+
+- YOLOv8n
+- RTMDet-tiny
+- NanoDet-Plus-m 320
+- PicoDet-S 320
+- YOLOX-Nano
+- YOLOX-Tiny
+
+프레임워크 요구사항이 서로 달라 하나의 가상환경에 설치하지 않습니다. 특히
+NanoDet 공식 코드는 PyTorch 2 미만을 요구합니다. PicoDet은 공식 postprocess 포함
+ONNX를 사용하므로 현재 프로젝트의 ONNX Runtime 환경에서 실행합니다.
+RTMDet, NanoDet, YOLOX용 격리 환경과 공식 저장소는 최초 한 번 다음 명령으로
+준비합니다. 이미 설치된 항목은 재사용합니다. Windows에서 RTMDet의 MMCV를
+컴파일하므로 설치에 수 분이 걸릴 수 있습니다.
+
+```powershell
+python scripts\setup_coco_model_envs.py
+```
+
+[config/coco_models.yaml](config/coco_models.yaml)은 위 명령이 만드는 프로젝트 내부
+경로를 기본값으로 사용합니다.
+
+가중치는 기본 실행 시 파일이 없을 때 공식 배포처에서 자동 다운로드됩니다.
+추론 없이 가중치만 먼저 받으려면 다음 명령을 사용합니다.
+
+```powershell
+python scripts\run_coco_model_suite.py --download-only
+```
+
+기존 파일만 사용하고 네트워크 다운로드를 막으려면 `--no-download`를 추가합니다.
+
+먼저 추론 없이 필요한 파일이 실제로 있는지 검사할 수 있습니다.
+
+```powershell
+python scripts\run_coco_model_suite.py --check-only
+```
+
+`[MISSING]` 아래에는 존재하지 않는 Python 실행 파일, 가중치 또는 외부 저장소의
+절대 경로가 표시됩니다. 경로 문자열만 미리 등록한 상태는 설치가 완료된 상태가
+아닙니다. Python 실행 파일이나 외부 저장소가 없으면
+`python scripts\setup_coco_model_envs.py`를 먼저 실행합니다. 가중치는 기본 실행에서
+없을 때 자동으로 받으며, `--download-only`로 미리 받을 수도 있습니다.
+
+```powershell
+python scripts\run_coco_model_suite.py --device cpu
+```
+
+서로 다른 클래스의 top-2를 평가하려면 다음 명령을 사용합니다. 같은 클래스의 bbox가
+여러 개여도 클래스별 최고 점수 하나만 순위에 포함합니다. 정답 클래스가 1위 또는
+2위에 있고 해당 클래스 임계값도 통과하면 승인됩니다.
+
+```powershell
+python scripts\run_coco_model_suite.py --top-k 2 --device cpu
+```
+
+top-2 결과는 기존 top-1 결과를 덮어쓰지 않고
+`outputs/coco_model_suite_top2/`에 저장됩니다. 저장 위치를 직접 정하려면
+`--output-dir outputs/원하는_폴더명`을 추가합니다. `predictions.csv`에는
+`model_top1_*`와 `model_top2_*`가 함께 기록됩니다.
+
+top-2 추론을 이미 완료했다면 모델을 다시 실행하지 않고 라벨 분포 그래프와 CSV만
+다시 만들 수 있습니다.
+
+```powershell
+python scripts\regenerate_coco_model_suite_reports.py --top-k 2
+```
+
+각 모델 결과 폴더에는 `top2_by_true_class.png`, `book_top2_labels.png`,
+`topk_label_summary.csv`가 생성됩니다. 마지막 CSV는 그래프 표시 개수 제한과 관계없이
+폴더 레이블별 1·2순위 예측 라벨을 모두 기록합니다.
+
+현재 환경에서 YOLOv8n만 먼저 재평가하려면 다음처럼 모델 id를 제한합니다.
+
+```powershell
+python scripts\run_coco_model_suite.py --models yolov8n --device cpu
+```
+
+각 모델의 공식 실행 환경과 가중치는 다음 위치를 전제로 합니다.
+
+```text
+.model_envs/rtmdet/              # MMDetection 환경
+.model_envs/nanodet/             # NanoDet 환경
+.model_envs/yolox/               # YOLOX 환경
+third_party/nanodet/
+models/pretrained/rtmdet_tiny.pth
+models/pretrained/nanodet-plus-m_320.pth
+models/pretrained/picodet_s_320_lcnet_postprocessed.onnx
+models/pretrained/yolox_nano.pth
+models/pretrained/yolox_tiny.pth
+```
+
+한 모델이 실패해도 나머지 모델은 계속 실행됩니다. 최종적으로
+`outputs/coco_model_suite/run_status.csv`에 성공·실패 사유가 기록되며, 성공한
+모델에 대해서는 `model_comparison.csv`, `model_comparison.json`,
+`model_comparison.png`가 생성됩니다. 비교 그래프에는 클래스별 pass rate,
+이미지당 평균 처리 시간, 실제 모델 artifact 크기가 포함됩니다. 각 프레임워크가
+제공하는 API 경계가 달라 정확한 시간 측정 범위는 모델별
+`adapter_metadata.json`의 `timing_scope`도 함께 확인해야 합니다.
 
 `top1_by_true_class.png`와 `book_top1_labels.png`는 목표 클래스만으로 다시
 정규화하거나 필터링하지 않은 모델의 전체 vocabulary 예측을 시각화합니다. 폴더

@@ -1,4 +1,7 @@
 .venv/
+.model_envs/
+.uv-cache/
+third_party/
 __pycache__/
 *.pyc
 .env
@@ -22,4 +25,5 @@ sample/
 # Generated benchmark artifacts
 models/weights/
 models/exported/
+models/pretrained/
 outputs/
