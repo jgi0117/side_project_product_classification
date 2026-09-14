@@ -13,7 +13,7 @@ from yolo_benchmark.data import discover_images  # noqa: E402
 
 def test_discover_uses_actual_folder_layout_without_copying(tmp_path: Path) -> None:
     source = tmp_path / "sample"
-    for class_index, class_name in enumerate(("book", "bycicle", "guitar", "laptop")):
+    for class_index, class_name in enumerate(("book", "bycicle", "guitar", "laptop", "tv")):
         child_folder = "public" if class_name == "laptop" else "open_image"
         folder = source / class_name / child_folder
         folder.mkdir(parents=True, exist_ok=True)
@@ -25,15 +25,15 @@ def test_discover_uses_actual_folder_layout_without_copying(tmp_path: Path) -> N
             )
 
     items, invalid = discover_images(
-        source, ["bicycle", "book", "guitar", "laptop"]
+        source, ["computer", "book"]
     )
 
     assert invalid == 0
-    assert len(items) == 12
+    assert len(items) == 15
     assert sorted({item.label for item in items}) == [
         "bicycle",
         "book",
+        "computer",
         "guitar",
-        "laptop",
     ]
     assert not (tmp_path / "processed").exists()

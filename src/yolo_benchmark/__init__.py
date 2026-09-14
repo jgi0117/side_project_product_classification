@@ -1,3 +1,3 @@
-"""Utilities for the YOLO nano classification benchmark."""
+"""Shared data utilities for COCO object detection benchmarks."""
 
 __version__ = "0.1.0"

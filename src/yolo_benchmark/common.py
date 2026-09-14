@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import yaml
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -14,6 +13,8 @@ DEFAULT_CONFIG = PROJECT_ROOT / "config" / "inference.yaml"
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG) -> dict[str, Any]:
+    import yaml
+
     config_path = Path(path).resolve()
     with config_path.open("r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle)

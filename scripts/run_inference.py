@@ -1,123 +1,141 @@
 from __future__ import annotations
 
 import argparse
-import string
+import json
+import os
+import random
+import re
+import subprocess
 import sys
+from collections import Counter, defaultdict
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from yolo_benchmark.benchmark import (  # noqa: E402
-    evaluate_zero_shot,
-    resolve_device,
-    save_summary,
-)
-from yolo_benchmark.common import DEFAULT_CONFIG, load_config, seed_everything  # noqa: E402
-from yolo_benchmark.data import discover_images  # noqa: E402
+from yolo_benchmark.common import DEFAULT_CONFIG, load_config, write_json
+from yolo_benchmark.data import discover_images
+from yolo_benchmark.reports import render_model, render_summary
 
 
-def find_mounted_sample(configured: Path) -> Path | None:
-    """Find a Drive for desktop mount when its letter or root name differs."""
-    candidates = [configured]
-    for letter in string.ascii_uppercase:
+def find_source(configured):
+    if configured.is_dir():
+        return configured
+    # Locate translated Drive root names without assuming its mount letter.
+    for letter in "GHIJKLMNOPQRSTUVWXYZABCDEF":
         drive = Path(f"{letter}:/")
-        candidates.extend(
-            [
-                drive / "My Drive" / "side_project" / "sample",
-                drive / "내 드라이브" / "side_project" / "sample",
-                drive / "side_project" / "sample",
-            ]
-        )
-    for candidate in candidates:
-        if candidate.is_dir():
-            return candidate.resolve()
-    return None
+        for name in ("My Drive", "내 드라이브"):
+            candidate = drive / name / "side_project/sample"
+            if candidate.is_dir():
+                return candidate
+    raise FileNotFoundError(f"Drive sample 폴더를 찾을 수 없습니다. --source로 지정하세요: {configured}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="YOLOv8n/11n/26n ImageNet zero-shot inference 비교"
-    )
+def validate_config(config):
+    if config["classes"] != ["computer", "book"]:
+        raise ValueError("MVP classes must be [computer, book]")
+    if config["coco_class_mapping"] != {"computer": ["laptop", "tv"], "book": ["book"]}:
+        raise ValueError("Expected COCO mapping computer=laptop+tv, book=book")
+    for value in [*config["verification_thresholds"].values(), config["other_threshold"],
+                  config["detection_confidence"], config["nms_iou"], *config["report_criteria"].values()]:
+        if not 0 < float(value) <= 1:
+            raise ValueError("Thresholds must be in (0, 1]")
+    if config["detection_confidence"] > min(*config["verification_thresholds"].values(), config["other_threshold"]):
+        raise ValueError("Detection confidence must not exceed decision thresholds")
+    if config["speed_repeats"] < 1 or config["speed_warmup"] < 0:
+        raise ValueError("speed_repeats >= 1 and speed_warmup >= 0 required")
+    names = [spec["name"] for spec in config["models"]]
+    if len(set(names)) != len(names) or any(not re.fullmatch(r"[a-zA-Z0-9_-]+", name) for name in names):
+        raise ValueError("Model names must be unique safe folder names")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="COCO MVP inference and precision/recall reports")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
-    parser.add_argument("--source", type=Path, help="mount된 원본 카테고리 폴더")
-    parser.add_argument("--models", nargs="+", help="비교할 *-cls.pt 체크포인트")
-    parser.add_argument("--device", help="auto, cpu, 0 등")
-    parser.add_argument(
-        "--backend",
-        choices=("pytorch", "onnx", "both"),
-        help="실행 backend; 생략 시 inference.yaml의 backends 사용",
-    )
+    parser.add_argument("--source", type=Path)
+    parser.add_argument("--models", nargs="+", help="Model names from config")
+    parser.add_argument("--device", help="cpu, cuda:0, ...")
+    parser.add_argument("--output-name", help="New run folder under output_dir")
+    parser.add_argument("--limit-per-category", type=int, help="Smoke test only; sample each source category")
+    parser.add_argument("--report-only", type=Path, help="Regenerate reports from an existing run's raw detections")
     args = parser.parse_args()
+    if args.report_only:
+        output = args.report_only.resolve()
+        snapshot = json.loads((output / "run.json").read_text(encoding="utf-8"))
+        config = snapshot["config"]
+        results, errors = [], {}
+        for model in snapshot["selected_models"]:
+            raw_path = output / model / "detections.json"
+            if not raw_path.is_file():
+                errors[model] = "No completed detections.json; see inference.log"
+                continue
+            raw = json.loads(raw_path.read_text(encoding="utf-8"))
+            results.append(render_model(raw, config, output / model))
+        render_summary(results, errors, output)
+        print(f"Report: {output / 'report.html'}")
+        return 1 if errors else 0
+
     config = load_config(args.config)
-    configured_source = (args.source or config["raw_dir"]).resolve()
-    source = find_mounted_sample(configured_source)
-    if source is None:
-        raise SystemExit(
-            "Google Drive의 mount된 sample 폴더를 찾지 못했습니다.\n"
-            f"설정 경로: {configured_source}\n"
-            f"브라우저 링크: {config.get('drive_folder_url', '(없음)')}\n"
-            "Google Drive for desktop을 실행한 뒤 PowerShell에서 "
-            "`Get-PSDrive -PSProvider FileSystem`과 `Get-ChildItem G:\\`로 "
-            "실제 드라이브 문자와 My Drive 폴더명을 확인하세요."
-        )
-    if source != configured_source:
-        print(f"Configured path not found; auto-detected Drive path: {source}")
-
-    models = args.models or config["models"]
-    invalid = [name for name in models if not Path(name).stem.endswith("-cls")]
-    if invalid:
-        raise SystemExit(f"분류 체크포인트(*-cls.pt)만 사용할 수 있습니다: {invalid}")
-    if args.backend == "both":
-        backends = ["pytorch", "onnx"]
-    elif args.backend:
-        backends = [args.backend]
-    else:
-        backends = list(config["backends"])
-    unsupported = [name for name in backends if name not in {"pytorch", "onnx"}]
-    if unsupported:
-        raise SystemExit(f"지원하지 않는 backend입니다: {unsupported}")
-
-    seed_everything(int(config["seed"]))
-    device = resolve_device(args.device or str(config["device"]))
-    print(
-        f"Source: {source}\nDevice: {device}\nBackends: {backends}\n"
-        "Mode: ImageNet zero-shot open-set verification (no training)"
-    )
-    items, invalid_images = discover_images(source, config["classes"])
-    print(f"Unique valid images: {len(items)}, invalid skipped: {invalid_images}")
-    results_by_backend = {backend: [] for backend in backends}
-    for backend in backends:
-        for model_name in models:
-            print(f"\n===== {model_name} [{backend}] =====")
-            results_by_backend[backend].append(
-                evaluate_zero_shot(
-                    model_name=model_name,
-                    backend=backend,
-                    source=source,
-                    model_dir=config["model_dir"],
-                    output_dir=config["output_dir"],
-                    classes=config["classes"],
-                    patterns=config["imagenet_class_patterns"],
-                    thresholds=config["verification_thresholds"],
-                    top_k=int(config["top_k"]),
-                    onnx_simplify=bool(config["onnx"]["simplify"]),
-                    device=device,
-                    imgsz=int(config["imgsz"]),
-                    speed_warmup=int(config["speed_warmup"]),
-                    speed_repeats=int(config["speed_repeats"]),
-                    items=items,
-                    invalid_images=invalid_images,
-                )
-            )
-            save_summary(
-                results_by_backend[backend], config["output_dir"] / backend
-            )
-    print("\nSummaries:")
-    for backend in backends:
-        summary = (config["output_dir"] / backend / "summary.csv").resolve()
-        print(f"- {backend}: {summary}")
+    if args.device:
+        config["device"] = args.device
+    validate_config(config)
+    selected = [spec for spec in config["models"] if not args.models or spec["name"] in args.models]
+    if args.models and set(args.models) - {spec["name"] for spec in selected}:
+        parser.error("Unknown model name; check config/inference.yaml")
+    if args.limit_per_category is not None and args.limit_per_category < 1:
+        parser.error("--limit-per-category must be positive")
+    source = args.source.resolve() if args.source else find_source(config["raw_dir"])
+    items, invalid = discover_images(source, config["classes"], include_other=config["include_other"])
+    total_counts = dict(Counter(item.label for item in items))
+    if args.limit_per_category:
+        groups = defaultdict(list)
+        for item in items:
+            groups[item.label].append(item)
+        rng = random.Random(config["seed"])
+        items = [item for group in groups.values() for item in rng.sample(group, min(len(group), args.limit_per_category))]
+    name = args.output_name or datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", name):
+        parser.error("--output-name: use letters, digits, underscore or hyphen")
+    output = config["output_dir"] / name
+    output.mkdir(parents=True, exist_ok=False)
+    serial_config = {key: str(value) if isinstance(value, Path) else value for key, value in config.items()}
+    records = [{"path": str(item.source), "source_label": item.label, "sha256": item.sha256} for item in items]
+    write_json(output / "run.json", {"config": serial_config, "source": str(source),
+               "selected_models": [spec["name"] for spec in selected], "invalid_images": invalid,
+               "available_source_counts": total_counts, "evaluated_source_counts": dict(Counter(i.label for i in items)),
+               "smoke_test": bool(args.limit_per_category), "images": records})
+    print(f"Images: {len(items)}, invalid: {invalid}, categories: {Counter(i.label for i in items)}", flush=True)
+    print(f"Output: {output}", flush=True)
+    results, errors = [], {}
+    for spec in selected:
+        model_dir = output / spec["name"]
+        model_dir.mkdir()
+        job = model_dir / "job.json"
+        raw_path = model_dir / "detections.json"
+        write_json(job, {"config": serial_config, "model": spec, "images": records, "result": str(raw_path)})
+        interpreter = str(ROOT / spec["python"]) if "python" in spec else sys.executable
+        print(f"Running {spec['name']} ... log: {model_dir / 'inference.log'}", flush=True)
+        try:
+            native_floor = {"picodet": 0.025, "nanodet": 0.05}.get(spec["adapter"], 0)
+            if min(*config["verification_thresholds"].values(), config["other_threshold"]) < native_floor:
+                raise ValueError(f"Decision threshold below {spec['adapter']} native score floor {native_floor}")
+            env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+            with (model_dir / "inference.log").open("w", encoding="utf-8") as log:
+                process = subprocess.run([interpreter, str(ROOT / "scripts/detect_worker.py"), str(job)],
+                                         cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
+            if process.returncode:
+                raise RuntimeError(f"Worker exit {process.returncode}; see {spec['name']}/inference.log")
+            raw = json.loads(raw_path.read_text(encoding="utf-8"))
+            results.append(render_model(raw, config, model_dir))
+            print(f"{spec['name']}: accuracy={results[-1]['accuracy']:.2%}", flush=True)
+        except Exception as exc:
+            errors[spec["name"]] = str(exc)
+            print(f"FAILED {spec['name']}: {exc}", flush=True)
+        render_summary(results, errors, output)
+    print(f"Report: {output / 'report.html'}", flush=True)
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

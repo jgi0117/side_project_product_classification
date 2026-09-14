@@ -20,8 +20,14 @@ CLASS_ALIASES = {
     "bike": "bicycle",
     "guitar": "guitar",
     "guitars": "guitar",
-    "laptop": "laptop",
-    "laptops": "laptop",
+    "computer": "computer",
+    "computers": "computer",
+    "laptop": "computer",
+    "laptops": "computer",
+    "tv": "computer",
+    "tvs": "computer",
+    "television": "computer",
+    "televisions": "computer",
 }
 
 
@@ -33,11 +39,12 @@ class ImageItem:
 
 
 def _label_from_path(path: Path, root: Path) -> str | None:
-    label = None
-    for part in path.relative_to(root).parts[:-1]:
-        normalized = part.strip().lower().replace(" ", "_")
-        label = CLASS_ALIASES.get(normalized, label)
-    return label
+    # The first folder is the annotation; nested folders are sources/sessions.
+    parts = path.relative_to(root).parts
+    if len(parts) < 2:
+        return None
+    normalized = parts[0].strip().lower().replace(" ", "_")
+    return CLASS_ALIASES.get(normalized, normalized)
 
 
 def _sha256(path: Path) -> str:
@@ -49,7 +56,7 @@ def _sha256(path: Path) -> str:
 
 
 def discover_images(
-    source: Path, expected_classes: list[str]
+    source: Path, expected_classes: list[str], *, include_other: bool = True
 ) -> tuple[list[ImageItem], int]:
     """Read mounted images in place and infer labels from category folders."""
     if not source.exists():
@@ -65,7 +72,9 @@ def discover_images(
     )
     for path in tqdm(paths, desc="Validating Drive images", unit="image"):
         label = _label_from_path(path, source)
-        if label not in expected_classes:
+        if label is None:
+            raise ValueError(f"이미지는 카테고리 폴더 안에 있어야 합니다: {path}")
+        if not include_other and label not in expected_classes:
             continue
         try:
             with Image.open(path) as image:
