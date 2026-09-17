@@ -3,6 +3,40 @@
 COCO 사전학습 탐지 모델로 `computer`, `book`, `other`를 평가합니다.
 `computer`는 COCO의 `laptop`과 `tv`를 통합합니다.
 
+## RTMDet-tiny top-k 비교 결과
+
+기존 전체 평가 292장의 저장된 탐지 결과를 재집계했습니다. 학습이나 추가 추론 없이
+동일한 탐지 결과에서 후보를 하나와 최대 두 개 허용했을 때를 비교했습니다.
+추가로 저장된 [새 실행 결과](docs/rtmdet-topk/comparison-new-run/README.md)에서도
+전체·클래스별 정답 포함률과 추가 정답 수가 동일했습니다.
+
+| 정답 그룹 | 이미지 수 | Top-1 정답률 | Top-2 정답 포함률 | 증가 (%p) | 추가 정답 수 |
+|---|---:|---:|---:|---:|---:|
+| 전체 | 292 | 90.07% | 97.95% | 7.88 | 23 |
+| computer | 200 | 89.00% | 97.50% | 8.50 | 17 |
+| book | 19 | 63.16% | 94.74% | 31.58 | 6 |
+| other | 73 | 100.00% | 100.00% | 0.00 | 0 |
+
+![RTMDet-tiny top-1과 top-2 비교](docs/rtmdet-topk/results/topk-comparison.png)
+
+Top-1에서 놓친 29장 중 23장은 두 번째 후보에 정답이 있었고, 6장은 top-2에서도
+놓쳤습니다. 특히 book은 12/19장에서 18/19장으로 늘었지만 표본이 19장으로 작습니다.
+전체 데이터의 200장이 computer이므로 전체 수치와 클래스별 수치를 함께 봐야 합니다.
+
+**97.95%는 후보 두 개 안에 정답이 들어가는 비율입니다.** 단일 예측 정확도나
+운영 수락·거절 성능이 97.95%가 됐다는 뜻은 아닙니다. 후보가 두 개인 이미지는
+269/292장이므로, 실제 사용에는 후보 선택 또는 확인 절차가 필요합니다.
+other의 100%도 other가 후보에 포함됐다는 의미이며 잘못된 대상 후보가 없다는 뜻은 아닙니다.
+
+평가 조건은 CPU, RTMDet-tiny COCO 사전학습 가중치, 그룹별 임계값 0.05,
+탐지 confidence 0.01, NMS IoU 0.6입니다. Top-k는 `computer/book/other` 그룹 순위이며
+원본 COCO 클래스 순위나 탐지 박스 개수가 아닙니다.
+
+RTMDet-tiny의 **top-1 / top-2 후보 비교**, 실행 명령과 Git용 그래프는
+[비교 README](docs/rtmdet-topk/README.md)를 참고하세요. top-k는 추론 후 후보 수이며 재학습 없이 비교합니다.
+집계 근거는 [CSV](docs/rtmdet-topk/results/comparison.csv)와
+[설정·원본 탐지 해시](docs/rtmdet-topk/results/comparison.json)에 기록했습니다.
+
 ## 실행
 
 ```powershell

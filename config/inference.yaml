@@ -55,6 +55,7 @@ verification_thresholds:
 
 # Keep all COCO detections; MVP classes are mapped after inference.
 include_other: true
+top_k: 1  # Maximum threshold-passing MVP groups; CLI --top-k 2 enables two candidates.
 detection_confidence: 0.01
 nms_iou: 0.6
 other_threshold: 0.05

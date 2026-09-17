@@ -31,9 +31,13 @@ def decide(detections, config):
         scores[group] = max(scores[group], float(det["score"]))
     thresholds = {**config["verification_thresholds"], "other": config["other_threshold"]}
     eligible = [label for label in labels if scores[label] > 0 and scores[label] >= thresholds[label]]
-    predicted = max(eligible, key=lambda label: scores[label]) if eligible else "other"
+    top_k = config.get("top_k", 1)
+    if type(top_k) is not int or top_k not in (1, 2):
+        raise ValueError("top_k must be 1 or 2")
+    ranked = sorted(eligible, key=lambda label: scores[label], reverse=True) or ["other"]
+    predicted = ranked[0]
     raw = max(detections, key=lambda det: det["score"], default=None)
-    return {"prediction": predicted, "scores": scores,
+    return {"prediction": predicted, "scores": scores, "candidates": ranked[:top_k],
             "raw_top1": raw["label"] if raw else "no_detection",
             "raw_top1_confidence": float(raw["score"]) if raw else 0.0,
             "decision_reason": "highest_passing_group" if eligible else "no_passing_detection"}
@@ -80,7 +84,10 @@ def evaluate(rows, config):
         {"item": "세션 기준 거절 오류", "scope": "session", "value": None,
          "operator": "<=", "threshold": criteria["session_false_reject_rate"], "status": "N/A"},
     ]
-    return {"images": total, "accuracy": accuracy, "macro": macro, "per_class": per_class,
+    return {"images": total, "accuracy": accuracy,
+            "top_k": config.get("top_k", 1),
+            "top_k_accuracy": sum(row["truth"] in row.get("candidates", [row["prediction"]]) for row in rows) / total,
+            "macro": macro, "per_class": per_class,
             "class_order": labels, "confusion_matrix": matrix.tolist(), "criteria": checks,
             "image_false_accept_rate": ratio(int(matrix[other, :other].sum()), negative_count),
             "image_false_reject_rate": ratio(int(matrix[:other, other].sum()), positive_count),
@@ -133,6 +140,8 @@ def render_model(raw, config, output):
     flat_rows = [{"path": row["path"], "source_label": row["source_label"],
                   "true_label": row["truth"], "prediction": row["prediction"],
                   "correct": row["truth"] == row["prediction"],
+                  "candidates": json.dumps(row["candidates"]),
+                  "top_k_correct": row["truth"] in row["candidates"],
                   "raw_top1": row["raw_top1"], "raw_top1_confidence": row["raw_top1_confidence"],
                   "decision_reason": row["decision_reason"],
                   **{f"score_{k}": v for k, v in row["scores"].items()},
@@ -184,6 +193,7 @@ def render_model(raw, config, output):
     plt.close(fig)
 
     lines = [f"# {raw['model']} — COCO MVP report", "",
+             f"Top-{metrics['top_k']} candidate hit rate: {percent(metrics['top_k_accuracy'])} (single-label metrics below remain top-1)", "",
              f"Images: {metrics['images']} | Accuracy: {percent(metrics['accuracy'])}", "",
              "| Class | Images | Precision | Recall | F1 | FPR | FNR |", "|---|---:|---:|---:|---:|---:|---:|"]
     if smoke:

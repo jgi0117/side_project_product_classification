@@ -1,0 +1,79 @@
+{
+  "model": "rtmdet-tiny",
+  "smoke_test": false,
+  "detections_sha256": "2395a73bed91940b8916af05fff59ce13c764a75b1794fdd4d2fdfad4850ae6d",
+  "settings": {
+    "coco_class_mapping": {
+      "computer": [
+        "laptop",
+        "tv"
+      ],
+      "book": [
+        "book"
+      ]
+    },
+    "verification_thresholds": {
+      "computer": 0.05,
+      "book": 0.05
+    },
+    "other_threshold": 0.05,
+    "detection_confidence": 0.01,
+    "nms_iou": 0.6,
+    "device": "cpu"
+  },
+  "runtime": {
+    "latency_mean_ms": 651.205521804015,
+    "latency_p50_ms": 670.0231499999063,
+    "latency_p95_ms": 867.2712749976199,
+    "fps": 1.5356135145011212,
+    "model_size_mib": 54.867642402648926,
+    "adapter": "rtmdet",
+    "imgsz": 640,
+    "device": "cpu",
+    "python": "3.11.15",
+    "warmup": 5,
+    "repeats": 3,
+    "timed_calls": 876,
+    "scope": "decoded image preprocessing + forward + postprocessing",
+    "postprocessing": "native export/head NMS for PicoDet/NanoDet; configured NMS for other adapters",
+    "effective_score_floor": 0.01
+  },
+  "comparison": [
+    {
+      "class": "all",
+      "images": 292,
+      "top1": 0.9006849315068494,
+      "top2": 0.9794520547945206,
+      "recovered": 23,
+      "gain_pp": 7.876712328767123
+    },
+    {
+      "class": "computer",
+      "images": 200,
+      "top1": 0.89,
+      "top2": 0.975,
+      "recovered": 17,
+      "gain_pp": 8.5
+    },
+    {
+      "class": "book",
+      "images": 19,
+      "top1": 0.631578947368421,
+      "top2": 0.9473684210526315,
+      "recovered": 6,
+      "gain_pp": 31.57894736842105
+    },
+    {
+      "class": "other",
+      "images": 73,
+      "top1": 1.0,
+      "top2": 1.0,
+      "recovered": 0,
+      "gain_pp": 0.0
+    }
+  ],
+  "candidate_counts": {
+    "1": 23,
+    "2": 269
+  }
+}

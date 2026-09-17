@@ -33,6 +33,8 @@ def find_source(configured):
 
 
 def validate_config(config):
+    if type(config.get("top_k", 1)) is not int or config.get("top_k", 1) not in (1, 2):
+        raise ValueError("top_k must be 1 or 2")
     if config["classes"] != ["computer", "book"]:
         raise ValueError("MVP classes must be [computer, book]")
     if config["coco_class_mapping"] != {"computer": ["laptop", "tv"], "book": ["book"]}:
@@ -56,11 +58,14 @@ def main():
     parser.add_argument("--source", type=Path)
     parser.add_argument("--models", nargs="+", help="Model names from config")
     parser.add_argument("--device", help="cpu, cuda:0, ...")
+    parser.add_argument("--top-k", type=int, choices=[1, 2], help="Maximum number of threshold-passing MVP groups")
     parser.add_argument("--output-name", help="New run folder under output_dir")
     parser.add_argument("--limit-per-category", type=int, help="Smoke test only; sample each source category")
     parser.add_argument("--report-only", type=Path, help="Regenerate reports from an existing run's raw detections")
     args = parser.parse_args()
     if args.report_only:
+        if args.top_k is not None:
+            parser.error("--report-only uses the saved config; use compare_topk.py for a top-k comparison")
         output = args.report_only.resolve()
         snapshot = json.loads((output / "run.json").read_text(encoding="utf-8"))
         config = snapshot["config"]
@@ -77,6 +82,8 @@ def main():
         return 1 if errors else 0
 
     config = load_config(args.config)
+    if args.top_k is not None:
+        config["top_k"] = args.top_k
     if args.device:
         config["device"] = args.device
     validate_config(config)

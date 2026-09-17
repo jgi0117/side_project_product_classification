@@ -64,6 +64,36 @@ class ReportTests(unittest.TestCase):
         self.assertIsNone(metrics["session_false_accept_rate"])
         self.assertEqual(metrics["criteria"][2]["status"], "N/A")
 
+    def test_top2_candidates_merge_thresholds_ties_and_fallback(self):
+        config = {**self.config, "top_k": 2}
+        result = decide([{"label": "laptop", "score": .9}, {"label": "tv", "score": .8},
+                         {"label": "book", "score": .7}], config)
+        self.assertEqual(result["candidates"], ["computer", "book"])
+        self.assertEqual(decide([], config)["candidates"], ["other"])
+        self.assertEqual(decide([{"label": "book", "score": .049}], config)["candidates"], ["other"])
+        self.assertEqual(decide([{"label": "book", "score": .05}], config)["candidates"], ["book"])
+        tied = decide([{"label": label, "score": .5} for label in ["bicycle", "book", "tv"]], config)
+        self.assertEqual(tied["candidates"], ["computer", "book"])
+        with self.assertRaises(ValueError):
+            decide([], {**config, "top_k": 3})
+
+    def test_top2_hit_rate_does_not_change_single_prediction_metrics(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from compare_topk import compare
+        raw = {"images": [
+            {"source_label": "book", "detections": [{"label": "bicycle", "score": .9}, {"label": "book", "score": .1}]},
+            {"source_label": "guitar", "detections": []},
+            {"source_label": "computer", "detections": []}]}
+        _, summaries = compare(raw, self.config)
+        self.assertEqual(summaries[0]["top1"], 1 / 3)
+        self.assertEqual(summaries[0]["top2"], 2 / 3)
+        self.assertEqual(summaries[0]["recovered"], 1)
+        rows = [{"truth": "book", "source_label": "book",
+                 **decide(raw["images"][0]["detections"], {**self.config, "top_k": 2})}]
+        metrics = evaluate(rows, {**self.config, "top_k": 2})
+        self.assertEqual(metrics["accuracy"], 0)
+        self.assertEqual(metrics["top_k_accuracy"], 1)
+
     def test_missing_negative_support_is_not_zero_error(self):
         metrics = evaluate([{"truth": "book", "prediction": "book", "source_label": "book"}], self.config)
         self.assertIsNone(metrics["image_false_accept_rate"])
