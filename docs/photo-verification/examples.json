@@ -1,0 +1,65 @@
+[
+  {
+    "example": "computer-correct",
+    "source_filename": "-1-_jpg.rf.2982755d3b8d0446157fb78e6ca44317.jpg",
+    "source_label": "computer",
+    "sha256": "c78dd8314ebd4c52c06ce0298024b5700078cffb624fafd0d3cd0458703d3c5c",
+    "top1": "computer",
+    "top2": [
+      "computer",
+      "other"
+    ],
+    "group_scores": {
+      "computer": 0.3748338520526886,
+      "book": 0.12178026884794235,
+      "other": 0.23159551620483398
+    }
+  },
+  {
+    "example": "book-recovered",
+    "source_filename": "book_0014_4b523b5b89444fcf.jpg",
+    "source_label": "book",
+    "sha256": "19e9ee7c01ee9d432b77d216eb2e5ba5860d98c9141c13d277b9bd3bc77eb20d",
+    "top1": "other",
+    "top2": [
+      "other",
+      "book"
+    ],
+    "group_scores": {
+      "computer": 0.29808497428894043,
+      "book": 0.36491456627845764,
+      "other": 0.6225025057792664
+    }
+  },
+  {
+    "example": "book-false-accept",
+    "source_filename": "bicycle_0019_db602fc8959dc474.jpg",
+    "source_label": "bicycle",
+    "sha256": "e656e77a96f90b8d9c2bd4c07b97cc706a688859cf1c7d454a9e16c9d595f69e",
+    "top1": "other",
+    "top2": [
+      "other",
+      "book"
+    ],
+    "group_scores": {
+      "computer": 0.07396656274795532,
+      "book": 0.11963613331317902,
+      "other": 0.48534849286079407
+    }
+  },
+  {
+    "example": "other-correct",
+    "source_filename": "bicycle_0014_2a8b321ec6b68648.jpg",
+    "source_label": "bicycle",
+    "sha256": "ee4d2380f2a66d9e78d3d8abcac5d317aa187ca9a7ba72d4882bacdb1780b153",
+    "top1": "other",
+    "top2": [
+      "other"
+    ],
+    "group_scores": {
+      "computer": 0.0,
+      "book": 0.04915769398212433,
+      "other": 0.7714046239852905
+    }
+  }
+]

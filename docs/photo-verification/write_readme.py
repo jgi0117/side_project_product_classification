@@ -1,4 +1,20 @@
-# F-03. 작업환경 행동 요구 — 사진 인증 AI 평가
+"""Render the root presentation README from published aggregate metrics."""
+import json
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+data = json.loads((HERE / "metrics.json").read_text(encoding="utf-8"))
+pct = lambda x: f"{x:.2%}"
+model_rows = []
+for m in data["top1"]:
+    b = [b for b in data["category_verification"] if b["model"] == m["model"] and b["top_k"] == 1]
+    model_rows.append(f"| {m['model']} | {pct(m['accuracy'])} | {pct(m['macro']['recall'])} | {pct(m['macro']['precision'])} | {pct(b[0]['fpr'])} | {pct(b[1]['fpr'])} |")
+rt_rows = []
+for label in ["computer", "book"]:
+    for b in data["category_verification"]:
+        if b["model"] == "rtmdet-tiny" and b["class"] == label:
+            rt_rows.append(f"| {label} | {b['top_k']} | {pct(b['accuracy'])} | {pct(b['recall'])} | {pct(b['precision'])} | {pct(b['fpr'])} ({b['fp']}/{b['fp']+b['tn']}) | {pct(b['fnr'])} |")
+text = r"""# F-03. 작업환경 행동 요구 — 사진 인증 AI 평가
 
 ## 1. 목적과 AI 엔지니어 담당 범위
 
@@ -88,13 +104,7 @@ computer/book/other 3개 클래스의 **macro 평균**이며, 등록 카테고�
 
 | 모델 | Acc ↑ | Macro Recall ↑ | Macro Precision ↑ | computer 등록 FPR ↓ | book 등록 FPR ↓ |
 |---|---:|---:|---:|---:|---:|
-| yolov8n | 79.11% | 73.67% | 84.63% | 1.09% | 0.00% |
-| yolov8s | 79.79% | 78.76% | 78.68% | 1.09% | 1.10% |
-| rtmdet-tiny | 90.07% | 84.05% | 88.31% | 2.17% | 0.37% |
-| nanodet-plus-m-320 | 89.04% | 77.92% | 86.60% | 3.26% | 0.37% |
-| picodet-s-320 | 91.78% | 79.54% | 86.26% | 2.17% | 0.73% |
-| yolox-nano | 84.93% | 71.74% | 79.37% | 2.17% | 0.73% |
-| yolox-tiny | 88.01% | 73.24% | 89.12% | 1.09% | 0.00% |
+MODEL_ROWS
 
 ![모델별 Top-1 성능과 오수락률](docs/photo-verification/top1-models.png)
 
@@ -141,10 +151,7 @@ book 촬영 후 인증이 거절될 수 있는 위험을 보여줍니다.
 
 | 등록 카테고리 | k | 수락/거절 Acc ↑ | Recall ↑ | Precision ↑ | FPR ↓ (FP/음성 수) | FNR ↓ |
 |---|---:|---:|---:|---:|---:|---:|
-| computer | 1 | 91.78% | 89.00% | 98.89% | 2.17% (2/92) | 11.00% |
-| computer | 2 | 92.81% | 97.50% | 92.42% | 17.39% (16/92) | 2.50% |
-| book | 1 | 97.26% | 63.16% | 92.31% | 0.37% (1/273) | 36.84% |
-| book | 2 | 80.82% | 94.74% | 24.66% | 20.15% (55/273) | 5.26% |
+RT_ROWS
 
 ![RTMDet 등록 카테고리별 성능 변화](docs/photo-verification/rtmdet-tradeoff.png)
 
@@ -202,20 +209,7 @@ AGPL은 “상업 이용 금지”가 아니지만 소스 제공 등 의무가 �
 
 ## 7. 실제 추론 이미지 예시
 
-[평가 이미지 Google Drive 폴더](https://drive.google.com/drive/folders/1H-wfZyZIEnoOGA3Mr6yhfgsb0a2cdCXR)의 실제 추론 이미지입니다.
-Drive 동기화 파일의 SHA-256을 평가 당시 목록과 대조해 동일 파일임을 확인하고 원본 그대로 복사했습니다.
-성공·복구·오수락 위험을 설명하기 위해 선택한 예시이며 무작위 표본이나 전체 성능의 근거가 아닙니다.
-
-| 예시 | 실제 폴더 정답 | Top-1 | Top-2 후보 |
-|---|---|---|---|
-| computer 정답<br><img src="docs/photo-verification/examples/computer-correct.jpg" width="240" alt="computer 정답"> | computer (computer) | computer | computer, other |
-| book: 2순위로 정답 복구<br><img src="docs/photo-verification/examples/book-recovered.jpg" width="240" alt="book: 2순위로 정답 복구"> | book (book) | other | other, book |
-| 다른 클래스: book 오수락 위험<br><img src="docs/photo-verification/examples/book-false-accept.jpg" width="240" alt="다른 클래스: book 오수락 위험"> | other (bicycle) | other | other, book |
-| other 정답<br><img src="docs/photo-verification/examples/other-correct.jpg" width="240" alt="other 정답"> | other (bicycle) | other | other |
-
-사진 속 모든 객체가 주석 처리된 데이터는 아닙니다. 다른 폴더의 사진에 book이 실제로 함께 있다면
-모델 탐지와 폴더 정답이 다를 수 있으므로, 아래 오수락은 폴더 정답 기준으로 해석합니다.
-이미지 출처 파일명·해시·그룹 점수는 [예시 기록](docs/photo-verification/examples.json)에 보존했습니다.
+EXAMPLE_SECTION
 
 ## 8. 재현과 결과 파일
 
@@ -241,3 +235,5 @@ RTMDet만 새로 추론하려면 (직접 실행):
 ```powershell
 .\.venv\Scripts\python.exe scripts/run_inference.py --models rtmdet-tiny --top-k 2 --output-name rtmdet-top2-new
 ```
+"""
+(HERE.parents[1] / "README.md").write_text(text.replace("MODEL_ROWS", "\n".join(model_rows)).replace("RT_ROWS", "\n".join(rt_rows)).replace("EXAMPLE_SECTION", (HERE / "examples.md").read_text(encoding="utf-8")), encoding="utf-8")
