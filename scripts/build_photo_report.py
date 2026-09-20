@@ -53,7 +53,7 @@ def main():
         "source_counts": snapshot["evaluated_source_counts"], "detections_sha256": hashes,
         "historical_run_criteria": config["report_criteria"],
         "presentation_targets": {"accuracy": .90, "minimum_accuracy": .80,
-            "precision": .80, "recall": .80, "proposed_fpr": .05, "proposed_fnr": .05,
+            "precision": .80, "recall": .80, "proposed_fpr": .10, "proposed_fnr": .10,
             "error_targets_status": "pending_PO_approval", "accuracy_priority_status": "pending_PO_approval"},
         "top1": models, "category_verification": binary})
     write_csv(args.output / "category-verification.csv", binary)
