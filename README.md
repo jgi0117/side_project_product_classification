@@ -29,7 +29,7 @@ MVP에서는 목적 이해, 실제 도구 환경으로의 이동, 인증 부담,
 
 ## 2. 평가 조건과 MVP 목표
 
-COCO 사전학습 경량 탐지 모델 7개를 top-1으로 비교한 뒤 RTMDet-tiny의 top-2를 평가했습니다.
+COCO 사전학습 경량 탐지 모델 6개의 top-1 결과와 RTMDet-tiny의 top-2 결과를 비교합니다.
 모두 이름이 tiny인 모델은 아니며 nano/small 모델도 포함합니다. 별도 fine-tuning은 없었습니다.
 이번 문서는 저장된 탐지 결과를 재집계했으며 학습·추론을 새로 실행하지 않았습니다.
 
@@ -47,14 +47,21 @@ COCO 사전학습 경량 탐지 모델 7개를 top-1으로 비교한 뒤 RTMDet-
 NanoDet/PicoDet는 native head/export 후처리를 사용하며 최소 점수는 각각 0.05/0.025입니다.
 모델별 입력 크기와 후처리가 달라 동일 구조·동일 연산량의 비교는 아닙니다.
 
-아래 수치는 저장소의 `report_criteria`에 있는 MVP 목표입니다. F-03 개요 자체에는 수치 목표가 없습니다.
+Acc는 기존 목표를 유지하고, Precision·Recall 목표는 각각 80% 이상으로 설정했습니다.
+FNR·FPR은 AI 담당자가 각각 5% 이하를 제안하며 **PO 확정 전**입니다.
 
 | 기준 | 목표 | 현재 판단 범위 |
 |---|---:|---|
 | 전체 단일 예측 Accuracy | 목표 ≥90%, 최소 ≥80% | Top-1 이미지 평가로 확인 |
-| 세션 수락 오류율 | ≤5% | 세션 정답·재시도 정보가 없어 N/A |
-| 세션 거절 오류율 | ≤20% | 세션 정답·재시도 정보가 없어 N/A |
-| Precision / Recall | 별도 목표 미정 | 클래스별 오류와 선택 기준으로 보고 |
+| Precision | ≥80% | 모델 비교는 macro 평균, 인증 검증은 등록 카테고리별로 확인 |
+| Recall | ≥80% | 모델 비교는 macro 평균, 인증 검증은 등록 카테고리별로 확인 |
+| FPR / FNR | 각각 ≤5% 제안 | PO가 최종 수치·집계 단위·적용 범위를 결정 |
+| 성능 개선 한계 시 우선순위 | Acc ≥80%를 최우선으로 제안 | PO 승인 대기; 다른 목표의 자동 면제를 의미하지 않음 |
+
+기존 실행 설정의 세션 수락 오류 5%·거절 오류 20%는 과거 기준으로 보존합니다.
+현재 승인된 FNR·FPR 목표로 간주하지 않습니다. PO가 이미지/세션 단위와 카테고리별 또는
+전체 집계 여부를 함께 정해야 합니다. 이미지 FNR ≤5%를 채택하면 같은 단위의 Recall ≥95%가
+필요하므로, Recall ≥80%보다 엄격한 조건이 됩니다.
 
 **이미지 FPR과 세션 수락 오류율은 다릅니다.** 아래 이미지 지표만으로 세션 목표 달성을 선언하지 않습니다.
 
@@ -88,7 +95,6 @@ computer/book/other 3개 클래스의 **macro 평균**이며, 등록 카테고�
 
 | 모델 | Acc ↑ | Macro Recall ↑ | Macro Precision ↑ | computer 등록 FPR ↓ | book 등록 FPR ↓ |
 |---|---:|---:|---:|---:|---:|
-| yolov8n | 79.11% | 73.67% | 84.63% | 1.09% | 0.00% |
 | yolov8s | 79.79% | 78.76% | 78.68% | 1.09% | 1.10% |
 | rtmdet-tiny | 90.07% | 84.05% | 88.31% | 2.17% | 0.37% |
 | nanodet-plus-m-320 | 89.04% | 77.92% | 86.60% | 3.26% | 0.37% |
@@ -99,7 +105,7 @@ computer/book/other 3개 클래스의 **macro 평균**이며, 등록 카테고�
 ![모델별 Top-1 성능과 오수락률](docs/photo-verification/top1-models.png)
 
 **정확도 1위는 PicoDet-s-320(91.78%)입니다.** RTMDet-tiny(90.07%)와 함께 목표 90%를
-넘었으며 YOLOv8n/s는 최소 80%에 미달했습니다. 따라서 RTMDet를 “정확도 최고 모델”이라고
+넘었으며 YOLOv8s는 최소 80%에 미달했습니다. 따라서 RTMDet를 “정확도 최고 모델”이라고
 설명하는 것은 맞지 않습니다.
 
 RTMDet-tiny는 **3개 클래스 macro recall 84.05%, F1 84.52%로 1위**입니다.
@@ -107,13 +113,17 @@ Macro precision은 RTMDet 88.31%이며, 1위는 YOLOX-tiny(89.12%)입니다.
 전체의 68.49%가 computer인 데이터에서 클래스 균형 지표가 강점인 후속 평가 대상입니다.
 Top-2는 RTMDet-tiny에 대해서만 수행했으므로 다른 모델의 top-2보다 우수한지는 알 수 없습니다.
 
-### Top-1 혼동행렬 — 모델 7개
+제시한 6개 모델 중 **macro Precision·Recall이 모두 80% 이상인 모델은 RTMDet-tiny**입니다.
+다만 RTMDet top-1의 book Recall은 63.16%로 카테고리별 목표에는 미달합니다.
+Top-2에서는 book Recall이 목표를 넘지만 Precision 24.66%가 미달하므로 개선이 필요합니다.
+
+### Top-1 혼동행렬 — 모델 6개
 
 행은 실제 클래스, 열은 단일 예측입니다. 칸마다 **건수와 실제 클래스 내 비율**을 표시했습니다.
 대각선은 정답, 비대각선은 오판입니다. 예를 들어 RTMDet의 book → other 오판은
 book 촬영 후 인증이 거절될 수 있는 위험을 보여줍니다.
 
-![7개 모델 Top-1 혼동행렬](docs/photo-verification/top1-confusion.png)
+![6개 모델 Top-1 혼동행렬](docs/photo-verification/top1-confusion.png)
 
 ## 4. 2차 평가 — RTMDet-tiny Top-1 → Top-2
 
@@ -168,7 +178,7 @@ Top-2에는 단일 예측이 없으므로 3×3 분류 혼동행렬을 만들지 
 | Top-1이 목표 Acc 90%를 만족하는가? | 현재 데이터에서 PicoDet와 RTMDet가 만족 |
 | Top-2가 올바른 사진의 거절을 줄이는가? | RTMDet computer/book recall은 모두 상승 |
 | Top-2를 그대로 자동 수락에 적용해도 되는가? | 등록 카테고리 FPR 증가가 커서 현재 결과로 채택을 권하기 어려움 |
-| 세션 오류 목표를 만족하는가? | N/A — 사용자 등록·반복 시도·기술오류를 포함한 세션 평가 필요 |
+| FNR·FPR 목표를 만족하는가? | PO 목표 확정 대기; 세션 단위는 별도 데이터가 필요 |
 | 사진 인증이 실제 작업 시작을 유도하는가? | 모델 평가로 알 수 없음 — 행동 지표와 사용자 조사 필요 |
 
 후속 검증은 카테고리별 임계값/2순위 수락 조건을 검증용 데이터에서 조정하고,
@@ -183,8 +193,7 @@ Book은 19장뿐이므로 음성 사진과 함께 데이터를 늘려야 합니�
 
 | 평가 모델 | 공식 구현 라이선스 | 상업 서비스 사용 조건 / 출처 |
 |---|---|---|
-| YOLOv8n | AGPL-3.0 / Enterprise | AGPL 의무 준수 시 상업 이용 가능. 비공개 제품 통합은 공급자의 Enterprise 계약 경로 확인. [공식 안내](https://www.ultralytics.com/license) |
-| YOLOv8s | AGPL-3.0 / Enterprise | YOLOv8n과 동일. 공급자는 학습 코드와 생성 모델에도 적용한다고 안내. [공식 안내](https://www.ultralytics.com/license) |
+| YOLOv8s | AGPL-3.0 / Enterprise | AGPL 의무 준수 시 상업 이용 가능. 비공개 제품 통합은 공급자의 Enterprise 계약 경로 확인. [공식 안내](https://www.ultralytics.com/license) |
 | RTMDet-tiny (MMDetection) | Apache-2.0 | 상업 이용·비공개 제품 통합 가능, 재배포 시 고지 등 준수. [LICENSE](https://github.com/open-mmlab/mmdetection/blob/main/LICENSE) |
 | NanoDet-Plus-m-320 | Apache-2.0 | 상업 이용 가능, 재배포 조건 준수. [LICENSE](https://github.com/RangiLyu/nanodet/blob/main/LICENSE) |
 | PicoDet-s-320 (PaddleDetection) | Apache-2.0 | 상업 이용 가능, 재배포 조건 준수. [LICENSE](https://github.com/PaddlePaddle/PaddleDetection/blob/release/2.9/LICENSE) |
@@ -241,3 +250,46 @@ RTMDet만 새로 추론하려면 (직접 실행):
 ```powershell
 .\.venv\Scripts\python.exe scripts/run_inference.py --models rtmdet-tiny --top-k 2 --output-name rtmdet-top2-new
 ```
+
+## 9. 다음 할 일과 PO·백엔드 협의 요청
+
+### ① FNR·FPR 목표 확정 — PO 결정 요청
+
+AI 담당 제안은 **FNR ≤5%, FPR ≤5%**입니다. PO가 최종 목표 수치와 평가 단위
+(이미지/세션), 카테고리별 적용 여부를 결정해 주어야 합니다. 아직 승인된 목표가 아닙니다.
+Precision·Recall ≥80%와 함께 관리하되, FNR ≤5%가 승인되면 해당 Recall은 ≥95%를 요구합니다.
+
+### ② Book·other 데이터 보강 → RTMDet 재검증 — AI 담당
+
+현재 computer 200장(68.49%), book 19장(6.51%), other 73장(25.00%)으로 불균형합니다.
+Book과 other 이미지를 추가 구축해 촬영 환경·각도·배경을 다양화하고 RTMDet-tiny로 다시 검증합니다.
+중복을 제거하고, 임계값 조정용 데이터와 최종 검증용 데이터를 분리해 클래스별
+Acc·Precision·Recall·FNR·FPR 및 혼동행렬을 다시 공유합니다. 확보할 이미지 수와 완료일은 별도 확정합니다.
+
+### ③ FastAPI 구축과 백엔드 연동 확인 — AI·백엔드 공동
+
+사진·등록 카테고리 입력, 성공/판정거절/기술오류 출력의 계약을 정리하고 FastAPI를 구축합니다.
+아래 시간은 **협의용 제안(KST)**이며 회의가 예약되거나 백엔드에 요청이 발송된 상태는 아닙니다.
+2026-09-20 기준 다음 주 목요일·금요일·토요일로 일정을 구체화했습니다.
+
+| 일정 제안 | 할 일 / 산출물 |
+|---|---|
+| **9/24(목) 18:00까지** | AI 담당이 input/output 명세 초안, 요청·응답 예시와 오류 구분을 백엔드에 공유 |
+| **9/25(금) 20:00–21:00** | 백엔드 연동 회의 1순위 제안: 실제 사진 요청, 응답 파싱, 실패 처리와 timeout 확인 |
+| **9/26(토) 14:00–15:00** | 금요일이 어렵다면 대체 회의 시간으로 제안 |
+| **9/26(토) 18:00까지** | 일요일(9/27) 전 연결 확인 목표: 성공·판정거절·기술오류 케이스 점검, 남은 이슈 기록 |
+
+백엔드 담당자의 가능한 시간을 확인해 금요일 또는 토요일 중 한 슬롯을 확정합니다.
+일요일 전 목표는 **연동 가능 여부 확인**이며 전체 기능의 운영 배포 완료를 뜻하지 않습니다.
+
+### ④ Acc–FPR 간 상충 개선, 개선 한계 시 우선순위 — PO 승인 요청
+
+후보를 늘리면 정답 포함률·Recall은 높아지지만 FPR도 증가하는 문제가 있습니다.
+Top-2 포함률은 단일 예측 Acc가 아니며, 실제 수락/거절 Acc는 카테고리에 따라 달라집니다.
+데이터 보강과 임계값·수락 조건 조정으로 성능 개선을 먼저 시도하되, 목표를 모두 달성하지
+못할 가능성도 있습니다.
+
+그 경우 **최종 단일 판정 Acc 80% 이상 확보를 최우선으로 한다는 방향에 PO 승인을 요청**합니다.
+Top-2 정답 포함률 97.95%를 Acc 80% 달성 근거로 대신 사용하지 않습니다.
+PO는 서비스가 감수할 수 있는 잔여 FPR/FNR과 출시 여부를 함께 결정해야 합니다.
+승인 전에는 Precision·Recall 목표나 오수락 제한을 임의로 완화하지 않습니다.

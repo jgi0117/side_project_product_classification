@@ -32,6 +32,8 @@ def main():
     config = snapshot["config"]
     models, binary, hashes = [], [], {}
     for name in snapshot["selected_models"]:
+        if name == "yolov8n":
+            continue  # Excluded from the presentation; preserve original cached runs.
         content = (args.run / name / "detections.json").read_bytes()
         hashes[name] = hashlib.sha256(content).hexdigest()
         raw = json.loads(content)
@@ -49,7 +51,11 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     write_json(args.output / "metrics.json", {"source_run": args.run.name, "images": len(snapshot["images"]),
         "source_counts": snapshot["evaluated_source_counts"], "detections_sha256": hashes,
-        "criteria": config["report_criteria"], "top1": models, "category_verification": binary})
+        "historical_run_criteria": config["report_criteria"],
+        "presentation_targets": {"accuracy": .90, "minimum_accuracy": .80,
+            "precision": .80, "recall": .80, "proposed_fpr": .05, "proposed_fnr": .05,
+            "error_targets_status": "pending_PO_approval", "accuracy_priority_status": "pending_PO_approval"},
+        "top1": models, "category_verification": binary})
     write_csv(args.output / "category-verification.csv", binary)
     write_csv(args.output / "top1-models.csv", [{"model": m["model"], "accuracy": m["accuracy"],
         "macro_precision": m["macro"]["precision"], "macro_recall": m["macro"]["recall"],
@@ -69,7 +75,7 @@ def main():
         bars = axes[0].barh(x + offset, vals, .25, label=title, color=color)
         axes[0].bar_label(bars, fmt="%.1f", fontsize=8)
     axes[0].set(yticks=x, yticklabels=[m["model"] for m in models], xlim=(0, 112), xlabel="%", title="Top-1: 정확도와 클래스 균형 성능")
-    for v, label, color in [(80, "최소 Acc 80%", "#64748b"), (90, "목표 Acc 90%", "#dc2626")]:
+    for v, label, color in [(80, "최소 Acc / Precision·Recall 목표 80%", "#64748b"), (90, "목표 Acc 90%", "#dc2626")]:
         axes[0].axvline(v, color=color, linestyle="--", label=label)
     axes[0].legend(fontsize=8, loc="upper center", bbox_to_anchor=(.5, -.09), ncol=3)
     for offset, label, color in [(-.18, "computer", "#2563eb"), (.18, "book", "#f59e0b")]:
@@ -91,10 +97,11 @@ def main():
             for j in range(values.shape[1]):
                 ax.text(j, i, f"{values[i,j]}\n({normalized[i,j]:.1%})", ha="center", va="center",
                         color="white" if normalized[i,j] > .5 else "black")
-    fig, axes = plt.subplots(2, 4, figsize=(18, 9), layout="constrained")
+    fig, axes = plt.subplots(2, 3, figsize=(15, 9), layout="constrained")
     for ax, m in zip(axes.flat, models):
         matrix(ax, m["confusion_matrix"], m["class_order"], m["class_order"], m["model"])
-    axes.flat[-1].axis("off")
+    for ax in list(axes.flat)[len(models):]:
+        ax.axis("off")
     fig.suptitle("Top-1 혼동행렬 · 건수와 행 정규화 비율 · 동일한 292장")
     fig.savefig(args.output / "top1-confusion.png", dpi=170)
     plt.close(fig)
@@ -113,6 +120,7 @@ def main():
             bars = ax.bar(np.arange(4) + offset, [100 * b[key] for key in keys], .35, label=f"top-{k}", color=color)
             ax.bar_label(bars, fmt="%.1f", padding=3)
         ax.set(xticks=range(4), xticklabels=["수락/거절 Acc", "Recall ↑", "Precision ↑", "FPR ↓"], ylim=(0, 115), title=f"{label} 등록", ylabel="%")
+        ax.hlines(80, .6, 2.4, color="#dc2626", linestyle="--", label="Precision·Recall 목표 80%")
         ax.legend()
     fig.suptitle("후보 확대: 정답 회복과 오수락 증가를 함께 확인")
     fig.savefig(args.output / "rtmdet-tradeoff.png", dpi=170)

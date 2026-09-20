@@ -8,7 +8,6 @@
     "computer": 200
   },
   "detections_sha256": {
-    "yolov8n": "61877524ae21d69975ec46ddba00fc5997afe167e0d96b31c64413f14bdd6024",
     "yolov8s": "b3e431570add3b7b1e104f6dad91433b8b64c492b7ad39295ad42ffc19e9aeea",
     "rtmdet-tiny": "e9c9f23a016fb0fa323bc1bc0e0a5258b64e6155787624af768426383f280141",
     "nanodet-plus-m-320": "43babb5a0a7f564d4366d25e65032f84255c64e8de91e7fae826043c9e1bb3a7",
@@ -16,136 +15,23 @@
     "yolox-nano": "4c431373054723d4dbad0631d57e940171e2071f60f46b6b9473a474b304de80",
     "yolox-tiny": "431881527dbb92c5ee21e3f2f0a08c43b54788180322c96ff5290505a85dd564"
   },
-  "criteria": {
+  "historical_run_criteria": {
     "target_accuracy": 0.9,
     "minimum_accuracy": 0.8,
     "session_false_accept_rate": 0.05,
     "session_false_reject_rate": 0.2
   },
+  "presentation_targets": {
+    "accuracy": 0.9,
+    "minimum_accuracy": 0.8,
+    "precision": 0.8,
+    "recall": 0.8,
+    "proposed_fpr": 0.05,
+    "proposed_fnr": 0.05,
+    "error_targets_status": "pending_PO_approval",
+    "accuracy_priority_status": "pending_PO_approval"
+  },
   "top1": [
-    {
-      "model": "yolov8n",
-      "images": 292,
-      "accuracy": 0.791095890410959,
-      "top_k": 1,
-      "top_k_accuracy": 0.791095890410959,
-      "macro": {
-        "precision": 0.8462773429660846,
-        "recall": 0.7366618601297765,
-        "f1": 0.7333323406494138
-      },
-      "per_class": [
-        {
-          "class": "computer",
-          "support": 200,
-          "tp": 150,
-          "fp": 1,
-          "fn": 50,
-          "tn": 91,
-          "precision": 0.9933774834437086,
-          "recall": 0.75,
-          "f1": 0.8547008547008547,
-          "false_accept_rate": 0.010869565217391304,
-          "false_reject_rate": 0.25
-        },
-        {
-          "class": "book",
-          "support": 19,
-          "tp": 9,
-          "fp": 0,
-          "fn": 10,
-          "tn": 273,
-          "precision": 1.0,
-          "recall": 0.47368421052631576,
-          "f1": 0.6428571428571429,
-          "false_accept_rate": 0.0,
-          "false_reject_rate": 0.5263157894736842
-        },
-        {
-          "class": "other",
-          "support": 73,
-          "tp": 72,
-          "fp": 60,
-          "fn": 1,
-          "tn": 159,
-          "precision": 0.5454545454545454,
-          "recall": 0.9863013698630136,
-          "f1": 0.7024390243902439,
-          "false_accept_rate": 0.273972602739726,
-          "false_reject_rate": 0.0136986301369863
-        }
-      ],
-      "class_order": [
-        "computer",
-        "book",
-        "other"
-      ],
-      "confusion_matrix": [
-        [
-          150,
-          0,
-          50
-        ],
-        [
-          0,
-          9,
-          10
-        ],
-        [
-          1,
-          0,
-          72
-        ]
-      ],
-      "criteria": [
-        {
-          "item": "목표 전체 판별 정확도",
-          "scope": "image",
-          "value": 0.791095890410959,
-          "operator": ">=",
-          "threshold": 0.9,
-          "status": "FAIL"
-        },
-        {
-          "item": "최소 허용 정확도",
-          "scope": "image",
-          "value": 0.791095890410959,
-          "operator": ">=",
-          "threshold": 0.8,
-          "status": "FAIL"
-        },
-        {
-          "item": "세션 기준 수락 오류",
-          "scope": "session",
-          "value": null,
-          "operator": "<=",
-          "threshold": 0.05,
-          "status": "N/A"
-        },
-        {
-          "item": "세션 기준 거절 오류",
-          "scope": "session",
-          "value": null,
-          "operator": "<=",
-          "threshold": 0.2,
-          "status": "N/A"
-        }
-      ],
-      "image_false_accept_rate": 0.0136986301369863,
-      "image_false_reject_rate": 0.273972602739726,
-      "negative_images": 73,
-      "positive_images": 219,
-      "source_counts": {
-        "bicycle": 31,
-        "book": 19,
-        "guitar": 42,
-        "computer": 200
-      },
-      "session_false_accept_rate": null,
-      "session_false_reject_rate": null,
-      "annotation_basis": "single primary folder label; other folders assumed negative",
-      "session_status": "No session annotations; image rates are not session rates"
-    },
     {
       "model": "yolov8s",
       "images": 292,
@@ -886,34 +772,6 @@
     }
   ],
   "category_verification": [
-    {
-      "model": "yolov8n",
-      "top_k": 1,
-      "class": "computer",
-      "tp": 150,
-      "fp": 1,
-      "fn": 50,
-      "tn": 91,
-      "accuracy": 0.8253424657534246,
-      "precision": 0.9933774834437086,
-      "recall": 0.75,
-      "fpr": 0.010869565217391304,
-      "fnr": 0.25
-    },
-    {
-      "model": "yolov8n",
-      "top_k": 1,
-      "class": "book",
-      "tp": 9,
-      "fp": 0,
-      "fn": 10,
-      "tn": 273,
-      "accuracy": 0.9657534246575342,
-      "precision": 1.0,
-      "recall": 0.47368421052631576,
-      "fpr": 0.0,
-      "fnr": 0.5263157894736842
-    },
     {
       "model": "yolov8s",
       "top_k": 1,
