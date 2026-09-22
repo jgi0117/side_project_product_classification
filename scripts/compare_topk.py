@@ -14,6 +14,16 @@ from yolo_benchmark.common import write_json
 from yolo_benchmark.reports import decide, percent, ratio, write_csv
 
 
+def binary_metrics(rows, label):
+    tp = sum(r["truth"] == label and label in r["candidates"] for r in rows)
+    fp = sum(r["truth"] != label and label in r["candidates"] for r in rows)
+    fn = sum(r["truth"] == label and label not in r["candidates"] for r in rows)
+    tn = len(rows) - tp - fp - fn
+    return {"class": label, "tp": tp, "fp": fp, "fn": fn, "tn": tn,
+            "accuracy": ratio(tp + tn, len(rows)), "precision": ratio(tp, tp + fp),
+            "recall": ratio(tp, tp + fn), "fpr": ratio(fp, fp + tn), "fnr": ratio(fn, tp + fn)}
+
+
 def compare(raw, config):
     rows = []
     for item in raw["images"]:
@@ -48,9 +58,19 @@ def main():
     raw = json.loads(raw_bytes)
     if raw["model"] != "rtmdet-tiny" or "rtmdet-tiny" not in snapshot["selected_models"]:
         raise ValueError("Expected a completed rtmdet-tiny run")
+    expected = [(r["path"], r["source_label"], r["sha256"]) for r in snapshot["images"]]
+    actual = [(r["path"], r["source_label"], r["sha256"]) for r in raw["images"]]
+    if expected != actual:
+        raise ValueError("Detections do not match the run image manifest")
     rows, summaries = compare(raw, snapshot["config"])
+    binary = []
+    for k in (1, 2):
+        selected = [{**r, "candidates": r["candidates"][:k]} for r in rows]
+        for label in snapshot["config"]["classes"]:
+            binary.append({"top_k": k, **binary_metrics(selected, label)})
     args.output.mkdir(parents=True, exist_ok=False)
     write_csv(args.output / "comparison.csv", summaries)
+    write_csv(args.output / "category-verification.csv", binary)
     # Publish aggregate results only: no original image paths in Git artifacts.
     write_json(args.output / "comparison.json", {
         "model": raw["model"], "smoke_test": snapshot["smoke_test"],
@@ -59,6 +79,8 @@ def main():
             "coco_class_mapping", "verification_thresholds", "other_threshold",
             "detection_confidence", "nms_iou", "device")},
         "runtime": raw["runtime"], "comparison": summaries,
+        "source_counts": snapshot["evaluated_source_counts"],
+        "category_verification": binary,
         "candidate_counts": {str(n): sum(len(r["candidates"]) == n for r in rows) for n in (1, 2)}})
 
     import matplotlib
@@ -91,6 +113,14 @@ def main():
               "Top-2는 후보를 최대 두 개 허용한 포함률입니다. 단일 예측 정확도, precision/F1, 운영 수락·거절 오류율의 개선을 뜻하지 않습니다.",
               "세 그룹 중 두 후보를 허용하므로 포함률은 구조적으로 상승할 수 있습니다. 학습이나 가중치 변경은 없습니다.", "",
               "[집계 CSV](comparison.csv) · [설정 및 원본 탐지 SHA-256](comparison.json)", ""]
+    lines += ["", "## 등록 카테고리별 수락/거절", "",
+              "| 카테고리 | k | Accuracy | Precision | Recall | FPR | FNR |",
+              "|---|---:|---:|---:|---:|---:|---:|"]
+    for row in binary:
+        lines.append(f"| {row['class']} | {row['top_k']} | " + " | ".join(
+            percent(row[key]) for key in ("accuracy", "precision", "recall", "fpr", "fnr")) + " |")
+    lines += ["", "폴더의 단일 정답 기준입니다. 사진에 여러 대상이 함께 있으면 오수락이 과대 집계될 수 있습니다.",
+              "[카테고리별 CSV](category-verification.csv)", ""]
     (args.output / "README.md").write_text("\n".join(lines), encoding="utf-8")
     print(args.output / "README.md")
 

@@ -3,13 +3,22 @@ from __future__ import annotations
 
 import argparse
 import faulthandler
+import hashlib
+import importlib.metadata
 import json
+import os
 import platform
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# YAPF/MMEngine cache creation must stay inside the writable workspace.
+cache_dir = ROOT / "outputs" / ".cache"
+cache_dir.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(cache_dir))
+os.environ["TEMP"] = str(cache_dir)
+os.environ["TMP"] = str(cache_dir)
 sys.path.insert(0, str(ROOT / "src"))
 faulthandler.enable()
 faulthandler.dump_traceback_later(120, repeat=True)
@@ -68,9 +77,11 @@ def main():
                "adapter": spec["adapter"], "imgsz": spec["imgsz"], "device": config["device"],
                "python": platform.python_version(), "warmup": warmup, "repeats": repeats,
                "timed_calls": len(durations), "scope": "decoded image preprocessing + forward + postprocessing",
-               "postprocessing": "native export/head NMS for PicoDet/NanoDet; configured NMS for other adapters"}
-    runtime["effective_score_floor"] = max(float(config["detection_confidence"]),
-        {"picodet": 0.025, "nanodet": 0.05}.get(spec["adapter"], 0))
+               "postprocessing": "RTMDet configured score threshold and NMS"}
+    runtime["effective_score_floor"] = float(config["detection_confidence"])
+    runtime["weights_sha256"] = hashlib.sha256((ROOT / spec["weights"]).read_bytes()).hexdigest()
+    runtime["packages"] = {name: importlib.metadata.version(name)
+                           for name in ("torch", "torchvision", "mmcv", "mmengine", "mmdet")}
     write_json(Path(job["result"]), {"model": spec["name"], "runtime": runtime, "images": images})
     faulthandler.cancel_dump_traceback_later()
 

@@ -2,7 +2,7 @@
 drive_folder_url: 'https://drive.google.com/drive/folders/18mUVx75GlJyRX6vUnw4zDWEWwwrPR8Fg?usp=sharing'
 raw_dir: 'G:/My Drive/side_project/sample'
 model_dir: models/pretrained
-output_dir: outputs/coco_model_suite
+output_dir: outputs/rtmdet
 
 classes:
   - computer
@@ -16,38 +16,11 @@ coco_class_mapping:
     - book
 
 models:
-  - name: yolov8n
-    adapter: ultralytics
-    weights: yolov8n.pt
-    imgsz: 640
-  - name: yolov8s
-    adapter: ultralytics
-    weights: yolov8s.pt
-    imgsz: 640
   - name: rtmdet-tiny
     adapter: rtmdet
     weights: models/pretrained/rtmdet_tiny.pth
     python: .model_envs/rtmdet/Scripts/python.exe
     imgsz: 640
-  - name: nanodet-plus-m-320
-    adapter: nanodet
-    weights: models/pretrained/nanodet-plus-m_320.pth
-    python: .model_envs/nanodet/Scripts/python.exe
-    imgsz: 320
-  - name: picodet-s-320
-    adapter: picodet
-    weights: models/pretrained/picodet_s_320_lcnet_postprocessed.onnx
-    imgsz: 320
-  - name: yolox-nano
-    adapter: yolox
-    weights: models/pretrained/yolox_nano.pth
-    python: .model_envs/yolox/Scripts/python.exe
-    imgsz: 416
-  - name: yolox-tiny
-    adapter: yolox
-    weights: models/pretrained/yolox_tiny.pth
-    python: .model_envs/yolox/Scripts/python.exe
-    imgsz: 416
 
 verification_thresholds:
   computer: 0.05

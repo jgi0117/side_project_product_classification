@@ -1,0 +1,25 @@
+{
+  "previous_unique_images": 292,
+  "current_unique_images": 372,
+  "retained_images": 292,
+  "added_images": 80,
+  "removed_images": 0,
+  "added_source_counts": {
+    "bed": 13,
+    "book": 52,
+    "table": 15
+  },
+  "current_source_counts": {
+    "bed": 13,
+    "bicycle": 31,
+    "book": 71,
+    "guitar": 42,
+    "computer": 200,
+    "table": 15
+  },
+  "invalid_images": 0,
+  "raw_image_count": 451,
+  "duplicate_image_count": 79,
+  "annotation_basis": "single primary folder label; no bounding boxes",
+  "training_performed": false
+}

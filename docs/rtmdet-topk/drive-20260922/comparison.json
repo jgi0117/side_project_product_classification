@@ -1,0 +1,149 @@
+{
+  "model": "rtmdet-tiny",
+  "smoke_test": false,
+  "detections_sha256": "8e3780b8827217fc3a15c8c66e28ac49851dcd4f3de54ae4eb202d254f49215f",
+  "settings": {
+    "coco_class_mapping": {
+      "computer": [
+        "laptop",
+        "tv"
+      ],
+      "book": [
+        "book"
+      ]
+    },
+    "verification_thresholds": {
+      "computer": 0.05,
+      "book": 0.05
+    },
+    "other_threshold": 0.05,
+    "detection_confidence": 0.01,
+    "nms_iou": 0.6,
+    "device": "cpu"
+  },
+  "runtime": {
+    "latency_mean_ms": 305.38297813522587,
+    "latency_p50_ms": 302.7489499654621,
+    "latency_p95_ms": 372.18679997022264,
+    "fps": 3.274576749844887,
+    "model_size_mib": 54.867642402648926,
+    "adapter": "rtmdet",
+    "imgsz": 640,
+    "device": "cpu",
+    "python": "3.11.15",
+    "warmup": 5,
+    "repeats": 3,
+    "timed_calls": 1116,
+    "scope": "decoded image preprocessing + forward + postprocessing",
+    "postprocessing": "RTMDet configured score threshold and NMS",
+    "effective_score_floor": 0.01,
+    "weights_sha256": "78e30dcce0c6f594eaff0d6977b84b4103688b4aff0ad1aa16008a8cc854a7fb",
+    "packages": {
+      "torch": "2.1.2",
+      "torchvision": "0.16.2",
+      "mmcv": "2.1.0",
+      "mmengine": "0.10.7",
+      "mmdet": "3.3.0"
+    }
+  },
+  "comparison": [
+    {
+      "class": "all",
+      "images": 372,
+      "top1": 0.8763440860215054,
+      "top2": 0.9838709677419355,
+      "recovered": 40,
+      "gain_pp": 10.75268817204301
+    },
+    {
+      "class": "computer",
+      "images": 200,
+      "top1": 0.89,
+      "top2": 0.975,
+      "recovered": 17,
+      "gain_pp": 8.5
+    },
+    {
+      "class": "book",
+      "images": 71,
+      "top1": 0.676056338028169,
+      "top2": 0.9859154929577465,
+      "recovered": 22,
+      "gain_pp": 30.985915492957748
+    },
+    {
+      "class": "other",
+      "images": 101,
+      "top1": 0.9900990099009901,
+      "top2": 1.0,
+      "recovered": 1,
+      "gain_pp": 0.9900990099009901
+    }
+  ],
+  "source_counts": {
+    "bed": 13,
+    "bicycle": 31,
+    "book": 71,
+    "guitar": 42,
+    "computer": 200,
+    "table": 15
+  },
+  "category_verification": [
+    {
+      "top_k": 1,
+      "class": "computer",
+      "tp": 178,
+      "fp": 3,
+      "fn": 22,
+      "tn": 169,
+      "accuracy": 0.9327956989247311,
+      "precision": 0.9834254143646409,
+      "recall": 0.89,
+      "fpr": 0.01744186046511628,
+      "fnr": 0.11
+    },
+    {
+      "top_k": 1,
+      "class": "book",
+      "tp": 48,
+      "fp": 1,
+      "fn": 23,
+      "tn": 300,
+      "accuracy": 0.9354838709677419,
+      "precision": 0.9795918367346939,
+      "recall": 0.676056338028169,
+      "fpr": 0.0033222591362126247,
+      "fnr": 0.323943661971831
+    },
+    {
+      "top_k": 2,
+      "class": "computer",
+      "tp": 195,
+      "fp": 20,
+      "fn": 5,
+      "tn": 152,
+      "accuracy": 0.9327956989247311,
+      "precision": 0.9069767441860465,
+      "recall": 0.975,
+      "fpr": 0.11627906976744186,
+      "fnr": 0.025
+    },
+    {
+      "top_k": 2,
+      "class": "book",
+      "tp": 70,
+      "fp": 72,
+      "fn": 1,
+      "tn": 229,
+      "accuracy": 0.803763440860215,
+      "precision": 0.49295774647887325,
+      "recall": 0.9859154929577465,
+      "fpr": 0.23920265780730898,
+      "fnr": 0.014084507042253521
+    }
+  ],
+  "candidate_counts": {
+    "1": 31,
+    "2": 341
+  }
+}

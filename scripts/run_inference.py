@@ -47,13 +47,15 @@ def validate_config(config):
         raise ValueError("Detection confidence must not exceed decision thresholds")
     if config["speed_repeats"] < 1 or config["speed_warmup"] < 0:
         raise ValueError("speed_repeats >= 1 and speed_warmup >= 0 required")
+    if len(config["models"]) != 1 or config["models"][0]["adapter"] != "rtmdet" or config["models"][0]["name"] != "rtmdet-tiny":
+        raise ValueError("This branch requires exactly one rtmdet-tiny model")
     names = [spec["name"] for spec in config["models"]]
     if len(set(names)) != len(names) or any(not re.fullmatch(r"[a-zA-Z0-9_-]+", name) for name in names):
         raise ValueError("Model names must be unique safe folder names")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="COCO MVP inference and precision/recall reports")
+    parser = argparse.ArgumentParser(description="RTMDet inference and top-k reports")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
     parser.add_argument("--source", type=Path)
     parser.add_argument("--models", nargs="+", help="Model names from config")
@@ -124,9 +126,6 @@ def main():
         interpreter = str(ROOT / spec["python"]) if "python" in spec else sys.executable
         print(f"Running {spec['name']} ... log: {model_dir / 'inference.log'}", flush=True)
         try:
-            native_floor = {"picodet": 0.025, "nanodet": 0.05}.get(spec["adapter"], 0)
-            if min(*config["verification_thresholds"].values(), config["other_threshold"]) < native_floor:
-                raise ValueError(f"Decision threshold below {spec['adapter']} native score floor {native_floor}")
             env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
             with (model_dir / "inference.log").open("w", encoding="utf-8") as log:
                 process = subprocess.run([interpreter, str(ROOT / "scripts/detect_worker.py"), str(job)],

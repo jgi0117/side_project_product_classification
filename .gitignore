@@ -23,3 +23,9 @@ sample/
 models/weights/
 models/exported/
 outputs/
+
+# Local model environments and downloaded third-party repositories
+.model_envs/
+.uv-cache/
+third_party/
+workspace/
