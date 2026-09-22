@@ -66,5 +66,33 @@ book FPR이 0.33%에서 23.92%로 증가합니다. Book precision은 97.96%에�
 따라서 top-2 포함률을 자동 승인 정확도로 해석하지 않습니다.
 사진에 여러 객체가 함께 있을 수 있으므로 폴더의 단일 정답 라벨에 따른 평가라는 한계도 있습니다.
 
-이 결과는 추가 데이터에 대한 **사전학습 모델의 추론 재평가**입니다.
-실제 fine-tuning 결과나 분리된 학습/검증/테스트 평가가 아닙니다.
+위 결과는 추가 데이터에 대한 **사전학습 모델의 추론 재평가**입니다.
+
+## 탐지 특징 학습 결과
+
+박스 주석이 없으므로 RTMDet 가중치는 고정했습니다. 대신 RTMDet가 출력한 80개 COCO 클래스의
+최대 confidence와 탐지 수를 특징으로 computer/book/other 후처리 분류기를 학습했습니다.
+성능은 각 이미지를 해당 fold의 학습에서 제외한 nested 5-fold OOF 예측으로 계산했습니다.
+
+| 모델 | Top-1 | Top-2 정답 포함률 |
+|---|---:|---:|
+| 기존 규칙 | 87.63% | 98.39% |
+| 학습 후처리기 (OOF) | 94.35% | 98.92% |
+
+[학습 보고서](docs/rtmdet-topk/trained-postprocessor-20260922/README.md) ·
+[학습 지표와 해시](docs/rtmdet-topk/trained-postprocessor-20260922/metrics.json)
+
+```powershell
+.venv/Scripts/python.exe scripts/train_topk_postprocessor.py `
+  --run outputs/rtmdet/drive-20260922 `
+  --output docs/rtmdet-topk/trained-postprocessor-20260922 `
+  --model-output models/trained/rtmdet_topk_postprocessor.joblib
+
+.venv/Scripts/python.exe scripts/apply_topk_postprocessor.py `
+  --model models/trained/rtmdet_topk_postprocessor.joblib `
+  --detections outputs/rtmdet/drive-20260922/rtmdet-tiny/detections.json `
+  --output outputs/rtmdet/trained-predictions.json --top-k 1
+```
+
+최종 후처리기는 372장 전체로 학습했습니다. 보고된 수치는 별도 외부 테스트셋 성능이 아니며,
+새 촬영 환경에 배포하기 전 분리된 테스트 데이터로 재검증해야 합니다.
