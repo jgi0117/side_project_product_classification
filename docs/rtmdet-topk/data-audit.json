@@ -20,6 +20,19 @@
   "invalid_images": 0,
   "raw_image_count": 451,
   "duplicate_image_count": 79,
+  "raw_source_counts": {
+    "bed": 13,
+    "bicycle": 31,
+    "book": 72,
+    "guitar": 42,
+    "laptop": 278,
+    "table": 15
+  },
+  "book_duplicate": {
+    "kept": "book31.jpeg",
+    "excluded": "book6.jpeg",
+    "sha256": "54c7f6c13d704b41dfd105398c07091de75e7cdfa3263c14b2ce6d0d0ef72a28"
+  },
   "annotation_basis": "single primary folder label; no bounding boxes",
   "training_performed": false
 }
