@@ -1,4 +1,10 @@
-# YOLO nano zero-shot verification benchmark
+# 상품 분류: RTMDet-x 추론 API와 YOLO 비교 실험
+
+## 이번 스프린트: RTMDet-x Top-1 API
+
+백엔드에서 이미지 한 장을 보내면 `computer`·`book`·`other` 중 하나를 반환하는 FastAPI 서비스를 추가했습니다. COCO 사전학습 **RTMDet-x만** 로드하고 Top-1 판정만 수행합니다. 실행 방법, HTTP 요청·응답 형식, 체크포인트 준비는 [RTMDet-x API 안내](docs/rtmdet-x-api.md)를 참고하세요.
+
+## 기존 YOLO nano zero-shot 비교 실험
 
 Google Drive에 있는 이미지에 별도 학습이나 fine-tuning을 수행하지 않고,
 ImageNet-1K 사전학습 분류 모델인 `YOLOv8n-cls`, `YOLO11n-cls`,

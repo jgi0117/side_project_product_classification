@@ -1,0 +1,5 @@
+# Install into the same Python 3.11 environment as requirements-rtmdet.txt.
+fastapi==0.141.1
+uvicorn==0.54.0
+python-multipart==0.0.32
+httpx==0.28.1  # TestClient and backend integration examples

@@ -23,3 +23,8 @@ sample/
 models/weights/
 models/exported/
 outputs/
+
+# Local RTMDet API environment and downloaded source trees
+.model_envs/
+.uv-cache/
+third_party/
