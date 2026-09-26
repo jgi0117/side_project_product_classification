@@ -19,6 +19,31 @@ models:
   - name: rtmdet-tiny
     adapter: rtmdet
     weights: models/pretrained/rtmdet_tiny.pth
+    config: rtmdet_tiny_8xb32-300e_coco.py
+    python: .model_envs/rtmdet/Scripts/python.exe
+    imgsz: 640
+  - name: rtmdet-s
+    adapter: rtmdet
+    weights: models/pretrained/rtmdet_s.pth
+    config: rtmdet_s_8xb32-300e_coco.py
+    python: .model_envs/rtmdet/Scripts/python.exe
+    imgsz: 640
+  - name: rtmdet-m
+    adapter: rtmdet
+    weights: models/pretrained/rtmdet_m.pth
+    config: rtmdet_m_8xb32-300e_coco.py
+    python: .model_envs/rtmdet/Scripts/python.exe
+    imgsz: 640
+  - name: rtmdet-l
+    adapter: rtmdet
+    weights: models/pretrained/rtmdet_l.pth
+    config: rtmdet_l_8xb32-300e_coco.py
+    python: .model_envs/rtmdet/Scripts/python.exe
+    imgsz: 640
+  - name: rtmdet-x
+    adapter: rtmdet
+    weights: models/pretrained/rtmdet_x.pth
+    config: rtmdet_x_8xb32-300e_coco.py
     python: .model_envs/rtmdet/Scripts/python.exe
     imgsz: 640
 

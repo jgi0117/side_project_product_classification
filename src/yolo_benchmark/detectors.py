@@ -31,7 +31,7 @@ def make_detector(spec, config):
     iou = float(config["nms_iou"])
     size = int(spec["imgsz"])
     if size != 640:
-        raise ValueError("RTMDet-tiny's bundled inference pipeline requires imgsz=640")
+        raise ValueError("RTMDet's bundled inference pipelines require imgsz=640")
     kind = spec["adapter"]
 
     torch_device = "cuda:0" if device == "0" else device
@@ -39,7 +39,12 @@ def make_detector(spec, config):
         import mmdet
         from mmdet.apis import init_detector, inference_detector
 
-        model_config = Path(mmdet.__file__).parent / ".mim/configs/rtmdet/rtmdet_tiny_8xb32-300e_coco.py"
+        config_name = spec["config"]
+        if Path(config_name).name != config_name or not config_name.endswith(".py"):
+            raise ValueError(f"Invalid RTMDet config name: {config_name}")
+        model_config = Path(mmdet.__file__).parent / ".mim/configs/rtmdet" / config_name
+        if not model_config.is_file():
+            raise FileNotFoundError(model_config)
         model = init_detector(str(model_config), str(weights), device=torch_device)
         model.test_cfg.score_thr = confidence
         model.test_cfg.nms.iou_threshold = iou

@@ -47,8 +47,16 @@ def validate_config(config):
         raise ValueError("Detection confidence must not exceed decision thresholds")
     if config["speed_repeats"] < 1 or config["speed_warmup"] < 0:
         raise ValueError("speed_repeats >= 1 and speed_warmup >= 0 required")
-    if len(config["models"]) != 1 or config["models"][0]["adapter"] != "rtmdet" or config["models"][0]["name"] != "rtmdet-tiny":
-        raise ValueError("This branch requires exactly one rtmdet-tiny model")
+    if not config["models"] or any(spec["adapter"] != "rtmdet" for spec in config["models"]):
+        raise ValueError("At least one RTMDet model is required")
+    for spec in config["models"]:
+        if spec.get("imgsz") != 640:
+            raise ValueError(f"{spec['name']}: imgsz must be 640")
+        size = spec["name"].removeprefix("rtmdet-")
+        if spec["name"] != f"rtmdet-{size}" or size not in ("tiny", "s", "m", "l", "x"):
+            raise ValueError(f"{spec['name']}: unsupported RTMDet model name")
+        if spec.get("config") != f"rtmdet_{size}_8xb32-300e_coco.py":
+            raise ValueError(f"{spec['name']}: config does not match model size")
     names = [spec["name"] for spec in config["models"]]
     if len(set(names)) != len(names) or any(not re.fullmatch(r"[a-zA-Z0-9_-]+", name) for name in names):
         raise ValueError("Model names must be unique safe folder names")
@@ -92,6 +100,14 @@ def main():
     selected = [spec for spec in config["models"] if not args.models or spec["name"] in args.models]
     if args.models and set(args.models) - {spec["name"] for spec in selected}:
         parser.error("Unknown model name; check config/inference.yaml")
+    missing = []
+    for spec in selected:
+        for key in ("weights", "python"):
+            path = ROOT / spec[key]
+            if not path.is_file():
+                missing.append(f"{spec['name']}: {key} missing: {path}")
+    if missing:
+        parser.error("\n".join(missing))
     if args.limit_per_category is not None and args.limit_per_category < 1:
         parser.error("--limit-per-category must be positive")
     source = args.source.resolve() if args.source else find_source(config["raw_dir"])

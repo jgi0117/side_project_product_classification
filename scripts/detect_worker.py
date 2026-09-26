@@ -9,6 +9,7 @@ import json
 import os
 import platform
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -19,6 +20,7 @@ cache_dir.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(cache_dir))
 os.environ["TEMP"] = str(cache_dir)
 os.environ["TMP"] = str(cache_dir)
+tempfile.tempdir = str(cache_dir)
 sys.path.insert(0, str(ROOT / "src"))
 faulthandler.enable()
 faulthandler.dump_traceback_later(120, repeat=True)
